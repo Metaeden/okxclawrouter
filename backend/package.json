@@ -1,0 +1,24 @@
+{
+  "name": "okx-llm-router-backend",
+  "version": "0.1.0",
+  "description": "LLM Router backend — x402 payment + OpenRouter proxy",
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "tsx watch src/server.ts"
+  },
+  "dependencies": {
+    "@okxweb3/x402-express": "latest",
+    "@okxweb3/x402-evm": "latest",
+    "@okxweb3/x402-core": "latest",
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.2",
+    "@types/node": "^22.15.3",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}
