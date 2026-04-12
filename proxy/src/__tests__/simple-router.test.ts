@@ -24,7 +24,7 @@ describe("simple-router", () => {
       true,
     );
     expect(decision.tier).toBe("PAID");
-    expect(decision.model).toBe("paid/claude-sonnet-4");
+    expect(decision.model).toBe("paid/claude-sonnet-4-6");
   });
 
   it("should detect reasoning signals and pick reasoning model", () => {
@@ -77,7 +77,7 @@ describe("simple-router", () => {
       false,
     );
     expect(decision.tier).toBe("PAID");
-    expect(decision.model).toBe("paid/claude-sonnet-4");
+    expect(decision.model).toBe("paid/claude-sonnet-4-6");
   });
 
   it("should include fallbacks", () => {

@@ -11,7 +11,7 @@ export const MODEL_MAP: Record<string, string> = {
   "free/deepseek-r1": "deepseek/deepseek-r1:free",
   "free/qwen3": "qwen/qwen3-next-80b-a3b-instruct:free",
   // PAID tier
-  "paid/claude-sonnet-4": "anthropic/claude-sonnet-4",
+  "paid/claude-sonnet-4-6": "anthropic/claude-sonnet-4-6",
   "paid/gpt-5.4": "openai/gpt-5.4",
   "paid/gemini-3.1-pro": "google/gemini-3.1-pro-preview",
 };

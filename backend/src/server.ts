@@ -96,7 +96,7 @@ app.use(
             scheme: "exact",
             network: NETWORK,
             payTo: PAY_TO,
-            price: getPrice("paid/claude-sonnet-4"), // default, overridden per-request in V2
+            price: getPrice("paid/claude-sonnet-4-6"), // default, overridden per-request in V2
           },
         ],
         description: "LLM Chat Completion (Paid Model)",

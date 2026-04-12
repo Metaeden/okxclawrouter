@@ -21,7 +21,7 @@ describe("stats", () => {
       success: true,
     });
     stats.record({
-      model: "paid/claude-sonnet-4",
+      model: "paid/claude-sonnet-4-6",
       tier: "PAID",
       timestamp: Date.now(),
       latencyMs: 200,

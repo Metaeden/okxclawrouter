@@ -21,7 +21,7 @@ describe("proxy models", () => {
 
   it("should validate known models", () => {
     expect(isValidModel("free/deepseek-chat")).toBe(true);
-    expect(isValidModel("paid/claude-sonnet-4")).toBe(true);
+    expect(isValidModel("paid/claude-sonnet-4-6")).toBe(true);
   });
 
   it("should reject unknown models", () => {

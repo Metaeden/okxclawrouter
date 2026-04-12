@@ -1,6 +1,6 @@
 // Per-request fixed pricing (V1 — simple, revisit in V2 for dynamic token-based pricing)
 export const MODEL_PRICES: Record<string, string> = {
-  "paid/claude-sonnet-4": "$0.01",
+  "paid/claude-sonnet-4-6": "$0.01",
   "paid/gpt-5.4": "$0.01",
   "paid/gemini-3.1-pro": "$0.008",
 };

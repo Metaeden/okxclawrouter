@@ -99,7 +99,7 @@ Users install it with a single command after having OpenClaw. Free models work o
 | `free/deepseek-chat` | `deepseek/deepseek-chat-v3-0324:free` | FREE | General-purpose primary | $0 |
 | `free/deepseek-r1` | `deepseek/deepseek-r1:free` | FREE | Reasoning tasks | $0 |
 | `free/qwen3` | `qwen/qwen3-next-80b-a3b-instruct:free` | FREE | General fallback | $0 |
-| `paid/claude-sonnet-4` | `anthropic/claude-sonnet-4` | PAID | High-quality general + code | $3/$15 per M tokens |
+| `paid/claude-sonnet-4-6` | `anthropic/claude-sonnet-4-6` | PAID | High-quality general + code | $3/$15 per M tokens |
 | `paid/gpt-5.4` | `openai/gpt-5.4` | PAID | High-quality general backup | $2.5/$15 per M tokens |
 | `paid/gemini-3.1-pro` | `google/gemini-3.1-pro-preview` | PAID | Strong reasoning + long context | $2/$12 per M tokens |
 
@@ -119,7 +119,7 @@ Request arrives
   │   │
   │   └─ Wallet connected with balance → PAID tier
   │       ├─ Reasoning signals detected → paid/gemini-3.1-pro
-  │       └─ General task → paid/claude-sonnet-4
+  │       └─ General task → paid/claude-sonnet-4-6
   │           └─ fallback → paid/gpt-5.4 → free/*
   │
   └─ Paid model request fails (402/balance) → Downgrade to FREE tier
@@ -134,7 +134,7 @@ Simple regex-based detection on the last user message:
 
 | Model | x402 Charge Per Request | Estimated Margin |
 |-------|------------------------|------------------|
-| `paid/claude-sonnet-4` | $0.01 | ~30-70% |
+| `paid/claude-sonnet-4-6` | $0.01 | ~30-70% |
 | `paid/gpt-5.4` | $0.01 | ~30-50% |
 | `paid/gemini-3.1-pro` | $0.008 | ~30-60% |
 
@@ -275,7 +275,7 @@ The install script:
   Free models ready — use without login:
     DeepSeek V3 / DeepSeek R1 / Qwen3
 
-  Want Claude Sonnet 4, GPT-5.4, Gemini 3.1 Pro?
+  Want Claude Sonnet 4.6, GPT-5.4, Gemini 3.1 Pro?
     1. Login wallet:  /wallet login <your-email>
     2. Fund wallet:   Send USDC on X Layer network
        -> https://web3.okx.com/onchainos

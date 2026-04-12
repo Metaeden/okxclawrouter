@@ -8,7 +8,7 @@ const FREE = {
 };
 
 const PAID = {
-  general: "paid/claude-sonnet-4",
+  general: "paid/claude-sonnet-4-6",
   reasoning: "paid/gemini-3.1-pro",
   fallbacks: ["paid/gpt-5.4"],
 };

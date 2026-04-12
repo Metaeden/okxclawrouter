@@ -2,7 +2,7 @@
 
 AI Agent LLM smart router with OKX Agentic Wallet + x402 micropayments on X Layer.
 
-Free models (DeepSeek, Qwen) work out of the box. Paid models (Claude Sonnet 4, GPT-5.4, Gemini 3.1 Pro) pay per-request via USDC on X Layer.
+Free models (DeepSeek, Qwen) work out of the box. Paid models (Claude Sonnet 4.6, GPT-5.4, Gemini 3.1 Pro) pay per-request via USDC on X Layer.
 
 ## Quick Start
 
@@ -36,7 +36,7 @@ AI Agent (Cursor/VS Code) → Local Proxy (:8402) → Backend (:4002) → OpenRo
 | `free/deepseek-chat` | FREE | $0 |
 | `free/deepseek-r1` | FREE | $0 |
 | `free/qwen3` | FREE | $0 |
-| `paid/claude-sonnet-4` | PAID | $0.01/req |
+| `paid/claude-sonnet-4-6` | PAID | $0.01/req |
 | `paid/gpt-5.4` | PAID | $0.01/req |
 | `paid/gemini-3.1-pro` | PAID | $0.008/req |
 
@@ -47,7 +47,7 @@ AI Agent (Cursor/VS Code) → Local Proxy (:8402) → Backend (:4002) → OpenRo
 3. Fund: Send USDC to your wallet on X Layer → https://web3.okx.com/onchainos
 4. Use: Paid models auto-selected when wallet is connected
 
-~$1 USDC = ~100 requests to Claude Sonnet 4.
+~$1 USDC = ~100 requests to Claude Sonnet 4.6.
 
 ## Commands
 

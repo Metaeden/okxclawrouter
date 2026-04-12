@@ -3,7 +3,7 @@ import { getPrice, DEFAULT_PRICE, MODEL_PRICES } from "../pricing.js";
 
 describe("pricing", () => {
   it("should return specific price for known paid models", () => {
-    expect(getPrice("paid/claude-sonnet-4")).toBe("$0.01");
+    expect(getPrice("paid/claude-sonnet-4-6")).toBe("$0.01");
     expect(getPrice("paid/gpt-5.4")).toBe("$0.01");
     expect(getPrice("paid/gemini-3.1-pro")).toBe("$0.008");
   });
@@ -14,7 +14,7 @@ describe("pricing", () => {
 
   it("should have prices for all paid models", () => {
     const paidModels = [
-      "paid/claude-sonnet-4",
+      "paid/claude-sonnet-4-6",
       "paid/gpt-5.4",
       "paid/gemini-3.1-pro",
     ];

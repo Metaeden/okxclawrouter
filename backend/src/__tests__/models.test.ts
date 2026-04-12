@@ -17,8 +17,8 @@ describe("models", () => {
     expect(resolveModel("free/deepseek-chat")).toBe(
       "deepseek/deepseek-chat-v3-0324:free",
     );
-    expect(resolveModel("paid/claude-sonnet-4")).toBe(
-      "anthropic/claude-sonnet-4",
+    expect(resolveModel("paid/claude-sonnet-4-6")).toBe(
+      "anthropic/claude-sonnet-4-6",
     );
   });
 

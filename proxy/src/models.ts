@@ -10,7 +10,7 @@ export const FREE_MODELS: Model[] = [
 ];
 
 export const PAID_MODELS: Model[] = [
-  { id: "paid/claude-sonnet-4", tier: "paid" },
+  { id: "paid/claude-sonnet-4-6", tier: "paid" },
   { id: "paid/gpt-5.4", tier: "paid" },
   { id: "paid/gemini-3.1-pro", tier: "paid" },
 ];

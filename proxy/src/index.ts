@@ -77,8 +77,8 @@ app.listen(config.port, () => {
 ${
   wallet.loggedIn
     ? `  PAID models ready:
-    Claude Sonnet 4 / GPT-5.4 / Gemini 3.1 Pro`
-    : `  Want Claude Sonnet 4, GPT-5.4, Gemini 3.1 Pro?
+    Claude Sonnet 4.6 / GPT-5.4 / Gemini 3.1 Pro`
+    : `  Want Claude Sonnet 4.6, GPT-5.4, Gemini 3.1 Pro?
     1. Login wallet:  /wallet login <your-email>
     2. Fund wallet:   Send USDC on X Layer network
        -> https://web3.okx.com/onchainos
