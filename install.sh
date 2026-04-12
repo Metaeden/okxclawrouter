@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_URL="https://github.com/your-org/okx-llm-router"
-INSTALL_DIR="${HOME}/.okx-llm-router"
+REPO_URL="https://github.com/your-org/okxclawrouter"
+INSTALL_DIR="${HOME}/.okxclawrouter"
 
 echo ""
 echo "═══════════════════════════════════════════════════════"
-echo "  OKX LLM Router — Installer"
+echo "  OKXClawRouter — Installer"
 echo "═══════════════════════════════════════════════════════"
 echo ""
 
@@ -52,7 +52,7 @@ fi
 
 # ── Step 3: Install the proxy ──────────────────────────────────
 echo ""
-echo "  Installing OKX LLM Router proxy..."
+echo "  Installing OKXClawRouter proxy..."
 
 if [ -d "$INSTALL_DIR" ]; then
   echo "  Updating existing installation..."
@@ -71,12 +71,12 @@ npm install --production --silent
 npm run build --silent 2>/dev/null || true
 
 # ── Step 4: Create launch script ──────────────────────────────
-LAUNCH_SCRIPT="${HOME}/.local/bin/okx-router"
+LAUNCH_SCRIPT="${HOME}/.local/bin/okxclawrouter"
 mkdir -p "$(dirname "$LAUNCH_SCRIPT")"
 
 cat > "$LAUNCH_SCRIPT" << 'LAUNCHER'
 #!/usr/bin/env bash
-INSTALL_DIR="${HOME}/.okx-llm-router/proxy"
+INSTALL_DIR="${HOME}/.okxclawrouter/proxy"
 export OKX_ROUTER_BACKEND="${OKX_ROUTER_BACKEND:-https://your-domain.com}"
 export OKX_ROUTER_PORT="${OKX_ROUTER_PORT:-8402}"
 node "$INSTALL_DIR/dist/index.js" "$@"
@@ -92,23 +92,26 @@ fi
 
 echo ""
 echo "═══════════════════════════════════════════════════════"
-echo "  Installation complete!"
+echo "  OKXClawRouter installed successfully!"
 echo "═══════════════════════════════════════════════════════"
 echo ""
 echo "  Free models ready — use without login:"
 echo "    DeepSeek V3 / DeepSeek R1 / Qwen3"
 echo ""
 echo "  Start the router:"
-echo "    okx-router"
+echo "    okxclawrouter"
 echo ""
 echo "  Configure your AI tool to use:"
 echo "    API Base URL: http://localhost:8402/v1"
 echo ""
 if [ "$ONCHAINOS_STATUS" = "installed" ]; then
-  echo "  Want paid models (Claude, GPT-5.4, Gemini 3.1 Pro)?"
+  echo "  Want paid models (Claude Sonnet 4, GPT-5.4, Gemini 3.1 Pro)?"
   echo "    1. Login:   /wallet login <email>"
   echo "    2. Fund:    Send USDC to your wallet on X Layer"
+  echo "       -> https://web3.okx.com/onchainos"
   echo "    3. Use:     Paid models auto-selected when wallet connected"
+  echo ""
+  echo "    ~\$1 USDC = ~100 requests to Claude Sonnet 4"
 else
   echo "  Install onchainos for paid model access:"
   echo "    npm install -g onchainos"

@@ -1,15 +1,35 @@
 import type { Request, Response } from "express";
-import { resolveModel } from "./models.js";
+import { resolveModel, MODEL_MAP } from "./models.js";
 
-const OPENROUTER_BASE = process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1";
+const OPENROUTER_BASE =
+  process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1";
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY!;
 
-export async function proxyToOpenRouter(req: Request, res: Response): Promise<void> {
+export async function proxyToOpenRouter(
+  req: Request,
+  res: Response,
+): Promise<void> {
   const body = req.body;
-  const internalModel = body.model;
-  const openRouterModel = resolveModel(internalModel);
 
-  const isStream = body.stream === true;
+  // Basic request validation
+  if (!body.messages || !Array.isArray(body.messages) || body.messages.length === 0) {
+    res.status(400).json({
+      error: "invalid_request",
+      message: "Request body must include a non-empty 'messages' array.",
+    });
+    return;
+  }
+
+  const internalModel = body.model;
+  if (internalModel && !(internalModel in MODEL_MAP) && !internalModel.includes("/")) {
+    res.status(400).json({
+      error: "unknown_model",
+      message: `Unknown model: ${internalModel}. Use GET /v1/models for available models.`,
+    });
+    return;
+  }
+
+  const openRouterModel = resolveModel(internalModel);
 
   let upstreamRes: globalThis.Response;
   try {
@@ -21,9 +41,15 @@ export async function proxyToOpenRouter(req: Request, res: Response): Promise<vo
         "HTTP-Referer": process.env.SITE_URL || "https://okx-llm-router.example.com",
       },
       body: JSON.stringify({ ...body, model: openRouterModel }),
+      signal: AbortSignal.timeout(120_000), // 2-minute timeout
     });
   } catch (err) {
-    res.status(502).json({ error: "upstream_error", message: String(err) });
+    const message =
+      err instanceof DOMException && err.name === "TimeoutError"
+        ? "Upstream request timed out"
+        : String(err);
+    console.error(`OpenRouter proxy error: ${message}`);
+    res.status(502).json({ error: "upstream_error", message });
     return;
   }
 
@@ -54,8 +80,8 @@ export async function proxyToOpenRouter(req: Request, res: Response): Promise<vo
       if (done) break;
       res.write(value);
     }
-  } catch {
-    // Client may have disconnected
+  } catch (err) {
+    console.error("Stream relay error:", err);
   } finally {
     res.end();
   }

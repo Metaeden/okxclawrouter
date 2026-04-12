@@ -1,16 +1,17 @@
 {
-  "name": "okx-llm-router-proxy",
+  "name": "okxclawrouter-proxy",
   "version": "0.1.0",
-  "description": "Local LLM routing proxy — smart model selection + x402 payment",
+  "description": "OKXClawRouter local proxy — smart model selection + x402 payment",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "okx-router": "dist/index.js"
+    "okxclawrouter": "dist/index.js"
   },
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
-    "dev": "tsx watch src/index.ts"
+    "dev": "tsx watch src/index.ts",
+    "test": "vitest run"
   },
   "dependencies": {
     "express": "^5.1.0"
@@ -19,6 +20,7 @@
     "@types/express": "^5.0.2",
     "@types/node": "^22.15.3",
     "tsx": "^4.19.4",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.4"
   }
 }

@@ -4,7 +4,10 @@ import config from "./config.js";
 import { handleChatCompletion } from "./proxy.js";
 import { ALL_MODELS } from "./models.js";
 import { handleCliCommand } from "./cli.js";
-import { isOnchainosInstalled, checkWalletStatus } from "./onchainos-wallet.js";
+import {
+  isOnchainosInstalled,
+  checkWalletStatus,
+} from "./onchainos-wallet.js";
 import { log } from "./logger.js";
 
 const app = express();
@@ -49,28 +52,44 @@ app.listen(config.port, () => {
   const onchainos = isOnchainosInstalled();
   const wallet = onchainos ? checkWalletStatus() : { loggedIn: false };
 
+  if (!onchainos) {
+    console.warn(
+      "\n  [WARN] onchainos CLI not found. Paid models require onchainos for wallet & payment.",
+    );
+    console.warn(
+      "         Install: npm install -g onchainos\n",
+    );
+  }
+
   console.log(`
 ═══════════════════════════════════════════════════════
-  OKX LLM Router v0.1.0
+  OKXClawRouter v0.1.0
 ═══════════════════════════════════════════════════════
 
   Proxy:     http://localhost:${config.port}
   Backend:   ${config.backendUrl}
-  onchainos: ${onchainos ? "installed" : "not found"}
+  onchainos: ${onchainos ? "installed" : "NOT FOUND (only free models available)"}
   Wallet:    ${wallet.loggedIn ? `connected (${wallet.address})` : "not connected"}
 
   FREE models ready — use without login:
-    free/deepseek-chat | free/deepseek-r1 | free/qwen3
+    DeepSeek V3 / DeepSeek R1 / Qwen3
 
-  ${
-    wallet.loggedIn
-      ? "PAID models ready — Claude Sonnet 4, GPT-5.4, Gemini 3.1 Pro"
-      : "Login for paid models: /wallet login <email>"
-  }
+${
+  wallet.loggedIn
+    ? `  PAID models ready:
+    Claude Sonnet 4 / GPT-5.4 / Gemini 3.1 Pro`
+    : `  Want Claude Sonnet 4, GPT-5.4, Gemini 3.1 Pro?
+    1. Login wallet:  /wallet login <your-email>
+    2. Fund wallet:   Send USDC on X Layer network
+       -> https://web3.okx.com/onchainos
+    3. Start using:   Paid models auto-selected when wallet connected`
+}
+
+  Usage stats: /stats    Models: /models    Help: /help
 ═══════════════════════════════════════════════════════
 `);
 
-  log.info(`Proxy listening on :${config.port}`);
+  log.info(`OKXClawRouter proxy listening on :${config.port}`);
 });
 
 export default app;

@@ -153,7 +153,7 @@ function handleTier(sub: string | undefined): string {
 
 function handleHelp(): string {
   return [
-    "OKX LLM Router Commands:",
+    "OKXClawRouter Commands:",
     "",
     "  /wallet login <email>  Login to Agentic Wallet",
     "  /wallet status         Check wallet status and balance",

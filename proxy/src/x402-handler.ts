@@ -7,6 +7,16 @@ interface PaymentResult {
   sessionCert?: string;
 }
 
+export class InsufficientBalanceError extends Error {
+  constructor(
+    public readonly required?: string,
+    public readonly available?: string,
+  ) {
+    super("Insufficient USDC balance for this request");
+    this.name = "InsufficientBalanceError";
+  }
+}
+
 /**
  * Handle HTTP 402 response: extract payment requirements, sign via onchainos CLI,
  * then retry the original request with payment headers.
@@ -42,9 +52,23 @@ export async function handleX402Payment(
       { encoding: "utf-8", stdio: "pipe" },
     );
     paymentResult = JSON.parse(output);
-  } catch (err) {
-    log.error("x402 payment signing failed:", err);
-    throw new Error("Payment signing failed — is your wallet logged in with sufficient balance?");
+  } catch (err: any) {
+    const stderr = err?.stderr?.toString() || err?.message || "";
+    log.error("x402 payment signing failed:", stderr);
+
+    // Detect insufficient balance from onchainos error output
+    if (
+      stderr.includes("insufficient") ||
+      stderr.includes("balance") ||
+      stderr.includes("not enough")
+    ) {
+      const price = (accepts[0] as any)?.price;
+      throw new InsufficientBalanceError(price);
+    }
+
+    throw new Error(
+      "Payment signing failed. Check wallet status with /wallet status.",
+    );
   }
 
   // Step 3: Build payment header
