@@ -151,6 +151,40 @@ fi
 
 ok "启动器已创建: $LAUNCH_SCRIPT"
 
+# ── Step 3.5: Auto-configure OpenClaw ──────────────────────────
+OPENCLAW_CONFIG="$HOME/.openclaw/openclaw.json"
+if [ -f "$OPENCLAW_CONFIG" ]; then
+  echo ""
+  echo -e "    ${DIM}检测到 OpenClaw，自动配置 provider...${RESET}"
+
+  # Use node to safely modify JSON (preserves formatting/comments-free)
+  node -e "
+    const fs = require('fs');
+    const cfg = JSON.parse(fs.readFileSync('$OPENCLAW_CONFIG', 'utf8'));
+    if (!cfg.models) cfg.models = { mode: 'merge', providers: {} };
+    if (!cfg.models.providers) cfg.models.providers = {};
+    cfg.models.providers.okxclawrouter = {
+      baseUrl: 'http://127.0.0.1:8402/v1',
+      api: 'openai-completions',
+      apiKey: 'sk-okxclawrouter',
+      models: [
+        { id: 'free/deepseek-chat',     name: '🆓 DeepSeek Chat',     api: 'openai-completions', reasoning: false, input: ['text'], cost: {input:0,output:0,cacheRead:0,cacheWrite:0}, contextWindow: 128000, maxTokens: 8192 },
+        { id: 'free/deepseek-r1',       name: '🆓 DeepSeek R1',       api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0,output:0,cacheRead:0,cacheWrite:0}, contextWindow: 128000, maxTokens: 8192 },
+        { id: 'free/qwen3',             name: '🆓 Qwen3',             api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0,output:0,cacheRead:0,cacheWrite:0}, contextWindow: 128000, maxTokens: 8192 },
+        { id: 'paid/claude-sonnet-4-6',  name: '💰 Claude Sonnet 4.6', api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0.01,output:0.01,cacheRead:0,cacheWrite:0}, contextWindow: 200000, maxTokens: 64000 },
+        { id: 'paid/gpt-5.4',           name: '💰 GPT-5.4',           api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0.01,output:0.01,cacheRead:0,cacheWrite:0}, contextWindow: 400000, maxTokens: 128000 },
+        { id: 'paid/gemini-3.1-pro',    name: '💰 Gemini 3.1 Pro',    api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0.008,output:0.008,cacheRead:0,cacheWrite:0}, contextWindow: 1050000, maxTokens: 65536 }
+      ]
+    };
+    fs.writeFileSync('$OPENCLAW_CONFIG', JSON.stringify(cfg, null, 2));
+    console.log('OK');
+  " 2>&1
+
+  ok "OpenClaw 已配置完成"
+else
+  warn "未检测到 OpenClaw — 安装后运行 okxclawrouter 再手动接入"
+fi
+
 echo ""
 
 # ── Done! ──────────────────────────────────────────────────────
@@ -170,9 +204,6 @@ echo ""
 echo -e "  ${BOLD}${STAR} 启动代理:${RESET}"
 echo -e "    ${W} okxclawrouter${RESET}"
 echo ""
-echo -e "  ${BOLD}${LINK} 去 Cursor / VS Code 设置:${RESET}"
-echo -e "    API Base URL → ${BOLD}http://localhost:8402/v1${RESET}"
-echo ""
 
 if [ "$HAS_ONCHAINOS" = true ]; then
 echo -e "  ${BOLD}${PAID} 解锁付费模型 (Claude / GPT-5.4 / Gemini Pro):${RESET}"
@@ -188,9 +219,12 @@ echo -e "    然后重新运行: curl -fsSL ${REPO_URL}/raw/main/install.sh | ba
 fi
 
 echo ""
-echo -e "  ${BOLD}${BRAIN} 接入 OpenClaw:${RESET}"
+echo -e "  ${BOLD}${BRAIN} OpenClaw 已自动配置，直接用:${RESET}"
 echo -e "    /model okxclawrouter/free/deepseek-chat     ${DIM}(免费)${RESET}"
 echo -e "    /model okxclawrouter/paid/claude-sonnet-4-6  ${DIM}(付费)${RESET}"
+echo ""
+echo -e "  ${BOLD}${LINK} Cursor / VS Code:${RESET}"
+echo -e "    API Base URL → ${BOLD}http://localhost:8402/v1${RESET}"
 echo ""
 echo -e "  ${BOLD}${BRAIN} 常用命令:${RESET}"
 echo -e "    /help          帮助"
