@@ -1,62 +1,305 @@
-import crypto from "crypto";
+/**
+ * Response Cache for LLM Completions
+ *
+ * Ported from ClawRouter's production-grade caching system.
+ * Caches LLM responses by request hash (model + messages + params).
+ *
+ * Features:
+ * - Canonicalized JSON hashing for consistent cache keys
+ * - TTL-based expiration (default 5 minutes)
+ * - Heap-based eviction when cache is full
+ * - Size limits per item (1MB max)
+ * - Hit/miss/eviction stats for monitoring
+ */
 
-interface CacheEntry {
+import { createHash } from "node:crypto";
+
+export type CachedLLMResponse = {
   body: string;
   status: number;
   headers: Record<string, string>;
-  timestamp: number;
-}
+  model: string;
+  cachedAt: number;
+  expiresAt: number;
+};
 
-const cache = new Map<string, CacheEntry>();
-const MAX_ENTRIES = 200;
-const TTL_MS = 5 * 60 * 1000; // 5 minutes
+export type ResponseCacheConfig = {
+  /** Maximum number of cached responses. Default: 200 */
+  maxSize?: number;
+  /** Default TTL in seconds. Default: 300 (5 minutes) */
+  defaultTTL?: number;
+  /** Maximum size per cached item in bytes. Default: 1MB */
+  maxItemSize?: number;
+  /** Enable/disable cache. Default: true */
+  enabled?: boolean;
+};
 
-function cacheKey(model: string, messages: string): string {
-  const hash = crypto
-    .createHash("sha256")
-    .update(`${model}:${messages}`)
-    .digest("hex")
-    .slice(0, 20);
-  return hash;
-}
+const DEFAULT_CONFIG: Required<ResponseCacheConfig> = {
+  maxSize: 200,
+  defaultTTL: 300,
+  maxItemSize: 1_048_576, // 1MB
+  enabled: true,
+};
 
-export function getCached(
-  model: string,
-  messages: string,
-): CacheEntry | null {
-  const key = cacheKey(model, messages);
-  const entry = cache.get(key);
-  if (!entry) return null;
-  if (Date.now() - entry.timestamp > TTL_MS) {
-    cache.delete(key);
-    return null;
+/**
+ * Canonicalize JSON by sorting object keys recursively.
+ * Ensures identical logical content produces identical hash.
+ */
+function canonicalize(obj: unknown): unknown {
+  if (obj === null || typeof obj !== "object") {
+    return obj;
   }
-  return entry;
+  if (Array.isArray(obj)) {
+    return obj.map(canonicalize);
+  }
+  const sorted: Record<string, unknown> = {};
+  for (const key of Object.keys(obj).sort()) {
+    sorted[key] = canonicalize((obj as Record<string, unknown>)[key]);
+  }
+  return sorted;
 }
 
-export function setCache(
-  model: string,
-  messages: string,
-  body: string,
-  status: number,
-  headers: Record<string, string>,
-): void {
-  // Only cache successful, non-streaming responses
-  if (status !== 200) return;
+/**
+ * Strip fields that shouldn't affect cache key:
+ * - stream (we handle streaming separately)
+ * - timestamps injected by OpenClaw
+ * - request IDs
+ */
+const TIMESTAMP_PATTERN = /^\[\w{3}\s+\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\s+\w+\]\s*/;
 
-  const key = cacheKey(model, messages);
+function normalizeForCache(obj: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
 
-  // Evict oldest if full
-  if (cache.size >= MAX_ENTRIES) {
-    const oldest = [...cache.entries()].sort(
-      (a, b) => a[1].timestamp - b[1].timestamp,
-    )[0];
-    if (oldest) cache.delete(oldest[0]);
+  for (const [key, value] of Object.entries(obj)) {
+    // Skip fields that don't affect response content
+    if (["stream", "user", "request_id", "x-request-id"].includes(key)) {
+      continue;
+    }
+
+    if (key === "messages" && Array.isArray(value)) {
+      // Strip timestamps from message content
+      result[key] = value.map((msg: unknown) => {
+        if (typeof msg === "object" && msg !== null) {
+          const m = msg as Record<string, unknown>;
+          if (typeof m.content === "string") {
+            return { ...m, content: m.content.replace(TIMESTAMP_PATTERN, "") };
+          }
+        }
+        return msg;
+      });
+    } else {
+      result[key] = value;
+    }
   }
 
-  cache.set(key, { body, status, headers, timestamp: Date.now() });
+  return result;
 }
 
-export function clearCache(): void {
-  cache.clear();
+export class ResponseCache {
+  private cache = new Map<string, CachedLLMResponse>();
+  private expirationHeap: Array<{ expiresAt: number; key: string }> = [];
+  private config: Required<ResponseCacheConfig>;
+
+  // Stats for monitoring
+  private stats = {
+    hits: 0,
+    misses: 0,
+    evictions: 0,
+  };
+
+  constructor(config: ResponseCacheConfig = {}) {
+    const filtered = Object.fromEntries(
+      Object.entries(config).filter(([, v]) => v !== undefined),
+    ) as ResponseCacheConfig;
+    this.config = { ...DEFAULT_CONFIG, ...filtered };
+  }
+
+  /**
+   * Generate cache key from request body.
+   * Hashes: model + messages + temperature + max_tokens + other params.
+   * Strips stream, user, request_id, and timestamps for consistent hashing.
+   */
+  static generateKey(body: string): string {
+    try {
+      const parsed = JSON.parse(body);
+      const normalized = normalizeForCache(parsed);
+      const canonical = canonicalize(normalized);
+      const keyContent = JSON.stringify(canonical);
+      return createHash("sha256").update(keyContent).digest("hex").slice(0, 32);
+    } catch {
+      // Fallback: hash raw body
+      return createHash("sha256").update(body).digest("hex").slice(0, 32);
+    }
+  }
+
+  /**
+   * Check if caching is enabled for this request.
+   * Respects cache control headers and request params.
+   */
+  shouldCache(body: string, headers?: Record<string, string>): boolean {
+    if (!this.config.enabled) return false;
+
+    // Respect Cache-Control: no-cache header
+    if (headers?.["cache-control"]?.includes("no-cache")) {
+      return false;
+    }
+
+    // Check for explicit cache disable in body
+    try {
+      const parsed = JSON.parse(body);
+      if (parsed.cache === false || parsed.no_cache === true) {
+        return false;
+      }
+    } catch {
+      // Not JSON, allow caching
+    }
+
+    return true;
+  }
+
+  /**
+   * Get cached response if available and not expired.
+   */
+  get(key: string): CachedLLMResponse | undefined {
+    const entry = this.cache.get(key);
+    if (!entry) {
+      this.stats.misses++;
+      return undefined;
+    }
+
+    // Check expiration
+    if (Date.now() > entry.expiresAt) {
+      this.cache.delete(key);
+      this.stats.misses++;
+      return undefined;
+    }
+
+    this.stats.hits++;
+    return entry;
+  }
+
+  /**
+   * Cache a response with optional custom TTL.
+   */
+  set(
+    key: string,
+    response: {
+      body: string;
+      status: number;
+      headers: Record<string, string>;
+      model: string;
+    },
+    ttlSeconds?: number,
+  ): void {
+    // Don't cache if disabled or maxSize is 0
+    if (!this.config.enabled || this.config.maxSize <= 0) return;
+
+    // Don't cache if item too large
+    if (Buffer.byteLength(response.body) > this.config.maxItemSize) {
+      return;
+    }
+
+    // Don't cache error responses
+    if (response.status >= 400) {
+      return;
+    }
+
+    // Evict if at capacity
+    if (this.cache.size >= this.config.maxSize) {
+      this.evict();
+    }
+
+    const now = Date.now();
+    const ttl = ttlSeconds ?? this.config.defaultTTL;
+    const expiresAt = now + ttl * 1000;
+
+    const entry: CachedLLMResponse = {
+      ...response,
+      cachedAt: now,
+      expiresAt,
+    };
+
+    this.cache.set(key, entry);
+    this.expirationHeap.push({ expiresAt, key });
+  }
+
+  /**
+   * Evict expired and oldest entries to make room.
+   */
+  private evict(): void {
+    const now = Date.now();
+
+    // First pass: remove expired entries
+    this.expirationHeap.sort((a, b) => a.expiresAt - b.expiresAt);
+
+    while (this.expirationHeap.length > 0) {
+      const oldest = this.expirationHeap[0];
+
+      // Check if entry still exists and matches
+      const entry = this.cache.get(oldest.key);
+      if (!entry || entry.expiresAt !== oldest.expiresAt) {
+        // Stale heap entry, remove it
+        this.expirationHeap.shift();
+        continue;
+      }
+
+      if (oldest.expiresAt <= now) {
+        // Expired, remove both
+        this.cache.delete(oldest.key);
+        this.expirationHeap.shift();
+        this.stats.evictions++;
+      } else {
+        // Not expired, stop
+        break;
+      }
+    }
+
+    // Second pass: if still at capacity, evict oldest
+    while (this.cache.size >= this.config.maxSize && this.expirationHeap.length > 0) {
+      const oldest = this.expirationHeap.shift()!;
+      if (this.cache.has(oldest.key)) {
+        this.cache.delete(oldest.key);
+        this.stats.evictions++;
+      }
+    }
+  }
+
+  /**
+   * Get cache statistics.
+   */
+  getStats(): {
+    size: number;
+    maxSize: number;
+    hits: number;
+    misses: number;
+    evictions: number;
+    hitRate: string;
+  } {
+    const total = this.stats.hits + this.stats.misses;
+    const hitRate = total > 0 ? ((this.stats.hits / total) * 100).toFixed(1) + "%" : "0%";
+
+    return {
+      size: this.cache.size,
+      maxSize: this.config.maxSize,
+      hits: this.stats.hits,
+      misses: this.stats.misses,
+      evictions: this.stats.evictions,
+      hitRate,
+    };
+  }
+
+  /**
+   * Clear all cached entries.
+   */
+  clear(): void {
+    this.cache.clear();
+    this.expirationHeap = [];
+  }
+
+  /**
+   * Check if cache is enabled.
+   */
+  isEnabled(): boolean {
+    return this.config.enabled;
+  }
 }

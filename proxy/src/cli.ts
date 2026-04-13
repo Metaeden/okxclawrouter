@@ -7,7 +7,7 @@ import {
 } from "./onchainos-wallet.js";
 import { stats } from "./stats.js";
 import { ALL_MODELS } from "./models.js";
-import { invalidateWalletCache } from "./proxy.js";
+import { invalidateWalletCache, getCacheStats } from "./proxy.js";
 
 export function handleCliCommand(command: string): string | null {
   const parts = command.trim().split(/\s+/);
@@ -97,11 +97,14 @@ function handleStats(sub: string | undefined): string {
     return "No requests yet.";
   }
 
+  const c = getCacheStats();
   const lines = [
     `Total requests: ${s.totalRequests}`,
     `  Free: ${s.freeRequests} | Paid: ${s.paidRequests}`,
     `  Success rate: ${s.successRate}%`,
     `  Avg latency: ${s.avgLatencyMs}ms`,
+    "",
+    `Cache: ${c.size}/${c.maxSize} entries, hit rate ${c.hitRate} (${c.hits}H/${c.misses}M/${c.evictions}E)`,
     "",
     "Model breakdown:",
   ];

@@ -4,11 +4,15 @@ import { route } from "./router/simple-router.js";
 import { checkWalletStatus } from "./onchainos-wallet.js";
 import { handleX402Payment, InsufficientBalanceError } from "./x402-handler.js";
 import { fetchWithRetry } from "./retry.js";
-import { dedup } from "./dedup.js";
+import { RequestDeduplicator, type CachedResponse } from "./dedup.js";
+import { ResponseCache } from "./response-cache.js";
 import { stats } from "./stats.js";
-import { getCached, setCache } from "./response-cache.js";
 import { log } from "./logger.js";
 import type { ChatMessage } from "./router/types.js";
+
+// Instantiate production-grade cache and deduplicator (ported from ClawRouter)
+const responseCache = new ResponseCache({ maxSize: 200, defaultTTL: 300 });
+const deduplicator = new RequestDeduplicator(30_000);
 
 let cachedWalletConnected: boolean | null = null;
 let walletCheckTimestamp = 0;
@@ -29,6 +33,11 @@ function isWalletConnected(): boolean {
 
 export function invalidateWalletCache(): void {
   cachedWalletConnected = null;
+}
+
+/** Expose cache stats for /stats CLI command */
+export function getCacheStats() {
+  return responseCache.getStats();
 }
 
 /**
@@ -66,16 +75,18 @@ export async function handleChatCompletion(
     `Routing: tier=${decision.tier} model=${decision.model} wallet=${walletOk} stream=${isStream}`,
   );
 
-  // Check non-streaming cache
-  const messagesKey = JSON.stringify(messages);
+  // Check non-streaming response cache (using canonical key from body)
+  const bodyStr = JSON.stringify({ ...body, model: decision.model });
   if (!isStream) {
-    const cached = getCached(decision.model, messagesKey);
+    const cacheKey = ResponseCache.generateKey(bodyStr);
+    const cached = responseCache.get(cacheKey);
     if (cached) {
-      log.debug("Cache hit:", decision.model);
+      log.debug(`Cache hit: ${decision.model} (key=${cacheKey.slice(0, 8)})`);
       res.status(cached.status);
       for (const [k, v] of Object.entries(cached.headers)) {
         res.setHeader(k, v);
       }
+      res.setHeader("X-Cache", "HIT");
       res.end(cached.body);
       stats.record({
         model: decision.model,
@@ -107,91 +118,209 @@ export async function handleChatCompletion(
     };
 
     try {
-      // Use dedup for non-streaming requests
       let upstreamRes: globalThis.Response;
+
       if (!isStream) {
-        upstreamRes = await dedup(upstreamBody, () =>
-          fetchWithRetry(upstreamUrl, {
+        // Use request deduplication for non-streaming requests
+        const dedupKey = RequestDeduplicator.hash(upstreamBody);
+
+        // Check completed cache first
+        const cachedResult = deduplicator.getCached(dedupKey);
+        if (cachedResult) {
+          log.debug(`Dedup cache hit: ${model} (key=${dedupKey.slice(0, 8)})`);
+          sendCachedResponse(res, cachedResult, model, decision.tier, startTime, balanceWarningEmitted);
+          return;
+        }
+
+        // Check if in-flight
+        const inflightPromise = deduplicator.getInflight(dedupKey);
+        if (inflightPromise) {
+          log.debug(`Dedup inflight hit: ${model} — waiting on original`);
+          const result = await inflightPromise;
+          sendCachedResponse(res, result, model, decision.tier, startTime, balanceWarningEmitted);
+          return;
+        }
+
+        // Mark as in-flight and execute
+        deduplicator.markInflight(dedupKey);
+        try {
+          upstreamRes = await fetchWithRetry(upstreamUrl, {
             method: "POST",
             headers,
             body: upstreamBody,
-          }),
-        );
+          });
+        } catch (fetchErr) {
+          deduplicator.removeInflight(dedupKey);
+          throw fetchErr;
+        }
+
+        // Handle 402 — payment required
+        if (upstreamRes.status === 402) {
+          deduplicator.removeInflight(dedupKey);
+          log.info("Received 402, initiating x402 payment...");
+          try {
+            upstreamRes = await handleX402Payment(
+              upstreamRes,
+              upstreamUrl,
+              headers,
+              upstreamBody,
+            );
+          } catch (payErr) {
+            if (payErr instanceof InsufficientBalanceError) {
+              log.warn("Insufficient balance, falling back to free models");
+              balanceWarningEmitted = true;
+              const remaining = modelsToTry.slice(i + 1);
+              const hasFree = remaining.some((m) => m.startsWith("free/"));
+              if (!hasFree) {
+                modelsToTry.push(...freeFallbackModels());
+              }
+              continue;
+            }
+            log.warn("Payment failed, trying fallback:", payErr);
+            continue;
+          }
+        }
+
+        // If still not 2xx, complete dedup with error and try fallback
+        if (upstreamRes.status >= 400 && i < modelsToTry.length - 1) {
+          deduplicator.removeInflight(dedupKey);
+          log.warn(`Model ${model} returned ${upstreamRes.status}, trying fallback`);
+          continue;
+        }
+
+        // Read full response body for caching + dedup completion
+        const chunks: Uint8Array[] = [];
+        if (upstreamRes.body) {
+          const reader = upstreamRes.body.getReader();
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            chunks.push(value);
+          }
+        }
+        let responseBody = Buffer.concat(chunks).toString();
+        const responseHeaders: Record<string, string> = {};
+        for (const [key, value] of upstreamRes.headers.entries()) {
+          if (!["transfer-encoding", "connection"].includes(key.toLowerCase())) {
+            responseHeaders[key] = value;
+          }
+        }
+
+        // Inject balance warning into JSON response
+        if (balanceWarningEmitted) {
+          try {
+            const parsed = JSON.parse(responseBody);
+            parsed._router_warning = {
+              type: "insufficient_balance",
+              message: "USDC balance insufficient. Switched to free model automatically.",
+              action: "Recharge at https://web3.okx.com/onchainos (X Layer network)",
+              actual_model: model,
+            };
+            responseBody = JSON.stringify(parsed);
+          } catch {
+            // Not JSON, leave as-is
+          }
+        }
+
+        // Complete dedup — notify waiters
+        const dedupResult: CachedResponse = {
+          status: upstreamRes.status,
+          headers: responseHeaders,
+          body: responseBody,
+          completedAt: Date.now(),
+        };
+        deduplicator.complete(dedupKey, dedupResult);
+
+        // Also populate response cache
+        const cacheKey = ResponseCache.generateKey(upstreamBody);
+        responseCache.set(cacheKey, {
+          body: responseBody,
+          status: upstreamRes.status,
+          headers: responseHeaders,
+          model,
+        });
+
+        // Send response to client
+        res.status(upstreamRes.status);
+        for (const [k, v] of Object.entries(responseHeaders)) {
+          res.setHeader(k, v);
+        }
+        if (balanceWarningEmitted) {
+          res.setHeader("X-Router-Warning", "insufficient_balance:switched_to_free");
+        }
+        res.setHeader("X-Cache", "MISS");
+        res.end(responseBody);
+
+        stats.record({
+          model,
+          tier: tier === "free" ? "FREE" : "PAID",
+          timestamp: Date.now(),
+          latencyMs: Date.now() - startTime,
+          success: upstreamRes.status >= 200 && upstreamRes.status < 300,
+        });
+        return;
       } else {
+        // Streaming — no dedup or caching
         upstreamRes = await fetchWithRetry(upstreamUrl, {
           method: "POST",
           headers,
           body: upstreamBody,
         });
-      }
 
-      // Handle 402 — payment required
-      if (upstreamRes.status === 402) {
-        log.info("Received 402, initiating x402 payment...");
-        try {
-          upstreamRes = await handleX402Payment(
-            upstreamRes,
-            upstreamUrl,
-            headers,
-            upstreamBody,
-          );
-        } catch (payErr) {
-          if (payErr instanceof InsufficientBalanceError) {
-            log.warn("Insufficient balance, falling back to free models");
-            balanceWarningEmitted = true;
-
-            // Ensure free models are in the fallback chain
-            const remaining = modelsToTry.slice(i + 1);
-            const hasFree = remaining.some((m) => m.startsWith("free/"));
-            if (!hasFree) {
-              modelsToTry.push(...freeFallbackModels());
+        // Handle 402 — payment required
+        if (upstreamRes.status === 402) {
+          log.info("Received 402, initiating x402 payment...");
+          try {
+            upstreamRes = await handleX402Payment(
+              upstreamRes,
+              upstreamUrl,
+              headers,
+              upstreamBody,
+            );
+          } catch (payErr) {
+            if (payErr instanceof InsufficientBalanceError) {
+              log.warn("Insufficient balance, falling back to free models");
+              balanceWarningEmitted = true;
+              const remaining = modelsToTry.slice(i + 1);
+              const hasFree = remaining.some((m) => m.startsWith("free/"));
+              if (!hasFree) {
+                modelsToTry.push(...freeFallbackModels());
+              }
+              continue;
             }
+            log.warn("Payment failed, trying fallback:", payErr);
             continue;
           }
-          log.warn("Payment failed, trying fallback:", payErr);
+        }
+
+        // If still not 2xx, try next fallback
+        if (upstreamRes.status >= 400 && i < modelsToTry.length - 1) {
+          log.warn(`Model ${model} returned ${upstreamRes.status}, trying fallback`);
           continue;
         }
-      }
 
-      // If still not 2xx, try next fallback
-      if (upstreamRes.status >= 400 && i < modelsToTry.length - 1) {
-        log.warn(
-          `Model ${model} returned ${upstreamRes.status}, trying fallback`,
-        );
-        continue;
-      }
-
-      // Forward response to client
-      res.status(upstreamRes.status);
-      const responseHeaders: Record<string, string> = {};
-      for (const [key, value] of upstreamRes.headers.entries()) {
-        if (
-          !["transfer-encoding", "connection"].includes(key.toLowerCase())
-        ) {
-          res.setHeader(key, value);
-          responseHeaders[key] = value;
+        // Forward streaming response to client
+        res.status(upstreamRes.status);
+        for (const [key, value] of upstreamRes.headers.entries()) {
+          if (!["transfer-encoding", "connection"].includes(key.toLowerCase())) {
+            res.setHeader(key, value);
+          }
         }
-      }
+        if (balanceWarningEmitted) {
+          res.setHeader("X-Router-Warning", "insufficient_balance:switched_to_free");
+        }
 
-      // If we fell back to free due to balance, add a warning header
-      if (balanceWarningEmitted) {
-        res.setHeader(
-          "X-Router-Warning",
-          "insufficient_balance:switched_to_free",
-        );
-      }
+        if (!upstreamRes.body) {
+          res.end();
+          return;
+        }
 
-      if (!upstreamRes.body) {
-        res.end();
-        return;
-      }
-
-      if (isStream) {
-        // Inject balance warning as a SSE comment before stream data
+        // Inject balance warning as SSE comment before stream data
         if (balanceWarningEmitted) {
           const warning = buildBalanceWarningSSE(model);
           res.write(warning);
         }
+
         const reader = upstreamRes.body.getReader();
         // Cancel upstream reader if client disconnects
         const onClose = () => reader.cancel().catch(() => {});
@@ -208,48 +337,16 @@ export async function handleChatCompletion(
           res.removeListener("close", onClose);
           if (!res.writableEnded) res.end();
         }
-      } else {
-        const chunks: Uint8Array[] = [];
-        const reader = upstreamRes.body.getReader();
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          chunks.push(value);
-        }
-        const responseBody = Buffer.concat(chunks).toString();
 
-        // Inject balance warning into non-streaming JSON response
-        if (balanceWarningEmitted) {
-          try {
-            const parsed = JSON.parse(responseBody);
-            parsed._router_warning = {
-              type: "insufficient_balance",
-              message:
-                "USDC balance insufficient. Switched to free model automatically.",
-              action: "Recharge at https://web3.okx.com/onchainos (X Layer network)",
-              actual_model: model,
-            };
-            const enriched = JSON.stringify(parsed);
-            setCache(model, messagesKey, enriched, upstreamRes.status, responseHeaders);
-            res.end(enriched);
-          } catch {
-            setCache(model, messagesKey, responseBody, upstreamRes.status, responseHeaders);
-            res.end(responseBody);
-          }
-        } else {
-          setCache(model, messagesKey, responseBody, upstreamRes.status, responseHeaders);
-          res.end(responseBody);
-        }
+        stats.record({
+          model,
+          tier: tier === "free" ? "FREE" : "PAID",
+          timestamp: Date.now(),
+          latencyMs: Date.now() - startTime,
+          success: upstreamRes.status >= 200 && upstreamRes.status < 300,
+        });
+        return;
       }
-
-      stats.record({
-        model,
-        tier: tier === "free" ? "FREE" : "PAID",
-        timestamp: Date.now(),
-        latencyMs: Date.now() - startTime,
-        success: upstreamRes.status >= 200 && upstreamRes.status < 300,
-      });
-      return;
     } catch (err: any) {
       log.error(`Error with model ${model}:`, err);
 
@@ -277,8 +374,7 @@ export async function handleChatCompletion(
 
       res.status(502).json({
         error: "all_models_failed",
-        message:
-          "All models are currently unavailable. Please try again later.",
+        message: "All models are currently unavailable. Please try again later.",
       });
       stats.record({
         model,
@@ -292,8 +388,36 @@ export async function handleChatCompletion(
   }
 }
 
+/**
+ * Send a cached/dedup response to the client.
+ */
+function sendCachedResponse(
+  res: Response,
+  cached: CachedResponse,
+  model: string,
+  tier: string,
+  startTime: number,
+  balanceWarning: boolean,
+): void {
+  res.status(cached.status);
+  for (const [k, v] of Object.entries(cached.headers)) {
+    res.setHeader(k, v);
+  }
+  if (balanceWarning) {
+    res.setHeader("X-Router-Warning", "insufficient_balance:switched_to_free");
+  }
+  res.setHeader("X-Cache", "HIT");
+  res.end(cached.body);
+  stats.record({
+    model,
+    tier,
+    timestamp: Date.now(),
+    latencyMs: Date.now() - startTime,
+    success: cached.status >= 200 && cached.status < 300,
+  });
+}
+
 function buildBalanceWarningSSE(fallbackModel: string): string {
-  // SSE comment lines (: prefix) — parsed by well-behaved SSE clients as comments
   return [
     `: [OKX Router] USDC balance insufficient — switched to free model: ${fallbackModel}`,
     `: [OKX Router] Recharge at https://web3.okx.com/onchainos (X Layer network)`,
