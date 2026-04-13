@@ -168,12 +168,12 @@ if [ -f "$OPENCLAW_CONFIG" ]; then
       api: 'openai-completions',
       apiKey: 'sk-okxclawrouter',
       models: [
-        { id: 'free/deepseek-chat',     name: '🆓 DeepSeek Chat',     api: 'openai-completions', reasoning: false, input: ['text'], cost: {input:0,output:0,cacheRead:0,cacheWrite:0}, contextWindow: 128000, maxTokens: 8192 },
-        { id: 'free/deepseek-r1',       name: '🆓 DeepSeek R1',       api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0,output:0,cacheRead:0,cacheWrite:0}, contextWindow: 128000, maxTokens: 8192 },
-        { id: 'free/qwen3',             name: '🆓 Qwen3',             api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0,output:0,cacheRead:0,cacheWrite:0}, contextWindow: 128000, maxTokens: 8192 },
-        { id: 'paid/claude-sonnet-4-6',  name: '💰 Claude Sonnet 4.6', api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0.01,output:0.01,cacheRead:0,cacheWrite:0}, contextWindow: 200000, maxTokens: 64000 },
-        { id: 'paid/gpt-5.4',           name: '💰 GPT-5.4',           api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0.01,output:0.01,cacheRead:0,cacheWrite:0}, contextWindow: 400000, maxTokens: 128000 },
-        { id: 'paid/gemini-3.1-pro',    name: '💰 Gemini 3.1 Pro',    api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0.008,output:0.008,cacheRead:0,cacheWrite:0}, contextWindow: 1050000, maxTokens: 65536 }
+        { id: 'free/deepseek-chat',     name: 'okxclawrouter 🆓 DeepSeek Chat',     api: 'openai-completions', reasoning: false, input: ['text'], cost: {input:0,output:0,cacheRead:0,cacheWrite:0}, contextWindow: 128000, maxTokens: 8192 },
+        { id: 'free/deepseek-r1',       name: 'okxclawrouter 🆓 DeepSeek R1',       api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0,output:0,cacheRead:0,cacheWrite:0}, contextWindow: 128000, maxTokens: 8192 },
+        { id: 'free/qwen3',             name: 'okxclawrouter 🆓 Qwen3',             api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0,output:0,cacheRead:0,cacheWrite:0}, contextWindow: 128000, maxTokens: 8192 },
+        { id: 'paid/claude-sonnet-4-6',  name: 'okxclawrouter 💰 Claude Sonnet 4.6', api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0.01,output:0.01,cacheRead:0,cacheWrite:0}, contextWindow: 200000, maxTokens: 64000 },
+        { id: 'paid/gpt-5.4',           name: 'okxclawrouter 💰 GPT-5.4',           api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0.01,output:0.01,cacheRead:0,cacheWrite:0}, contextWindow: 400000, maxTokens: 128000 },
+        { id: 'paid/gemini-3.1-pro',    name: 'okxclawrouter 💰 Gemini 3.1 Pro',    api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0.008,output:0.008,cacheRead:0,cacheWrite:0}, contextWindow: 1050000, maxTokens: 65536 }
       ]
     };
     fs.writeFileSync('$OPENCLAW_CONFIG', JSON.stringify(cfg, null, 2));
