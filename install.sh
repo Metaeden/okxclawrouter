@@ -188,6 +188,10 @@ echo -e "    然后重新运行: curl -fsSL ${REPO_URL}/raw/main/install.sh | ba
 fi
 
 echo ""
+echo -e "  ${BOLD}${BRAIN} 接入 OpenClaw:${RESET}"
+echo -e "    /model okxclawrouter/free/deepseek-chat     ${DIM}(免费)${RESET}"
+echo -e "    /model okxclawrouter/paid/claude-sonnet-4-6  ${DIM}(付费)${RESET}"
+echo ""
 echo -e "  ${BOLD}${BRAIN} 常用命令:${RESET}"
 echo -e "    /help          帮助"
 echo -e "    /models        查看模型列表"

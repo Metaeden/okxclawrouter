@@ -22,7 +22,30 @@ API Base URL: http://localhost:8402/v1
 
 ## 🧠 智能路由
 
-自动选择最优模型 — 免费模型免费用，付费模型按需付费。
+自动选择最优模型 — 免费模型免费用，付费模型按需付费。余额不足自动 fallback 到免费模型。
+
+### OpenClaw 接入
+
+先启动本地代理：
+```bash
+okxclawrouter
+```
+
+在 OpenClaw 里切换模型：
+```
+/model okxclawrouter/free/deepseek-chat        # 免费
+/model okxclawrouter/paid/claude-sonnet-4-6     # 付费
+/model okxclawrouter/paid/gpt-5.4              # 付费
+/model okxclawrouter/paid/gemini-3.1-pro       # 付费
+```
+
+> 💡 选付费模型时，如果余额不足会自动 fallback 到免费模型，无需手动切换。
+
+### Cursor / VS Code
+
+```
+API Base URL → http://localhost:8402/v1
+```
 
 | 模型 | 层级 | 费用 |
 |------|------|------|
