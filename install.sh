@@ -188,6 +188,29 @@ if [ -f "$OPENCLAW_CONFIG" ]; then
   " 2>&1
 
   ok "OpenClaw 已配置完成"
+
+  # Show wallet address and X Layer USDC balance if onchainos is installed
+  if [ "$HAS_ONCHAINOS" = true ]; then
+    node -e "
+      const { execSync } = require('child_process');
+      try {
+        const addrData = JSON.parse(execSync('onchainos wallet addresses', { encoding: 'utf8', stdio: 'pipe' }));
+        const balData = JSON.parse(execSync('onchainos wallet balance', { encoding: 'utf8', stdio: 'pipe' }));
+        const xlAddr = addrData?.data?.xlayer?.[0]?.address || addrData?.data?.evmAddress;
+        // Find USDC on X Layer (chainIndex 196)
+        const usdcAsset = balData?.data?.details?.[0]?.tokenAssets?.find(t => t.chainIndex === '196');
+        const usdcBalance = usdcAsset?.balance || '0';
+        const usdcSymbol = usdcAsset?.symbol || 'USDC';
+        if (xlAddr) {
+          console.log('');
+          console.log('  💰 Wallet address: ' + xlAddr);
+          if (usdcBalance !== '0') {
+            console.log('  💰 X Layer USDC: ' + usdcBalance + ' ' + usdcSymbol);
+          }
+        }
+      } catch(e) {}
+    " 2>&1
+  fi
 else
   warn "未检测到 OpenClaw — 安装后运行 okxclawrouter 再手动接入"
 fi

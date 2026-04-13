@@ -2,6 +2,7 @@ import config from "./config.js";
 import {
   isOnchainosInstalled,
   checkWalletStatus,
+  getXLayerUsdcBalance,
   walletLogin,
   walletLogout,
 } from "./onchainos-wallet.js";
@@ -65,11 +66,15 @@ function handleWallet(sub: string | undefined, arg?: string): string {
         "  /wallet login <email>",
       ].join("\n");
     }
+    const usdcBalance = getXLayerUsdcBalance();
     return [
       `Wallet: Connected`,
-      `Address: ${status.address}`,
       `Email: ${status.email}`,
-      status.balance ? `Balance: ${status.balance}` : "",
+      `X Layer address: ${status.address}`,
+      usdcBalance !== undefined ? `X Layer USDC: ${usdcBalance}` : "",
+      "",
+      `Deposit USDC on X Layer to unlock paid models:`,
+      `  https://web3.okx.com/onchainos`,
     ]
       .filter(Boolean)
       .join("\n");
