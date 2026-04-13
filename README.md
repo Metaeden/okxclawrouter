@@ -7,8 +7,8 @@ Free models (DeepSeek, Qwen) work out of the box. Paid models (Claude Sonnet 4.6
 ## Quick Start
 
 ```bash
-# Install
-curl -fsSL https://raw.githubusercontent.com/<your-org>/okxclawrouter/main/install.sh | bash
+# Install (one-liner)
+curl -fsSL https://raw.githubusercontent.com/Metaeden/okxclawrouter/main/install.sh | bash
 
 # Start the router
 okxclawrouter
@@ -95,8 +95,8 @@ cd proxy && npm test
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `OKX_ROUTER_BACKEND` | `http://130.162.140.123:4002` | Backend URL (pre-configured) |
 | `OKX_ROUTER_PORT` | 8402 | Local proxy port |
-| `OKX_ROUTER_BACKEND` | `https://your-domain.com` | Backend URL |
 
 ## Deploy Backend
 

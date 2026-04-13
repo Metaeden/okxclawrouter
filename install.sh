@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_URL="https://github.com/your-org/okxclawrouter"
+REPO_URL="https://github.com/Metaeden/okxclawrouter"
 INSTALL_DIR="${HOME}/.okxclawrouter"
 
 echo ""
@@ -77,7 +77,7 @@ mkdir -p "$(dirname "$LAUNCH_SCRIPT")"
 cat > "$LAUNCH_SCRIPT" << 'LAUNCHER'
 #!/usr/bin/env bash
 INSTALL_DIR="${HOME}/.okxclawrouter/proxy"
-export OKX_ROUTER_BACKEND="${OKX_ROUTER_BACKEND:-https://your-domain.com}"
+export OKX_ROUTER_BACKEND="${OKX_ROUTER_BACKEND:-http://130.162.140.123:4002}"
 export OKX_ROUTER_PORT="${OKX_ROUTER_PORT:-8402}"
 node "$INSTALL_DIR/dist/index.js" "$@"
 LAUNCHER
