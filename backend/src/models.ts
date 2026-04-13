@@ -6,9 +6,9 @@ export interface ModelDef {
 }
 
 export const MODEL_MAP: Record<string, string> = {
-  // FREE tier
-  "free/deepseek-chat": "deepseek/deepseek-chat-v3-0324:free",
-  "free/deepseek-r1": "deepseek/deepseek-r1:free",
+  // FREE tier — OpenRouter model IDs (no :free suffix for DeepSeek)
+  "free/deepseek-chat": "deepseek/deepseek-chat-v3-0324",
+  "free/deepseek-r1": "deepseek/deepseek-r1",
   "free/qwen3": "qwen/qwen3-next-80b-a3b-instruct:free",
   // PAID tier
   "paid/claude-sonnet-4-6": "anthropic/claude-sonnet-4-6",
