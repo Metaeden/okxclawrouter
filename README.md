@@ -1,23 +1,60 @@
-# OKXClawRouter
+# OKXClawRouter 🦞
 
-AI Agent LLM smart router with OKX Agentic Wallet + x402 micropayments on X Layer.
+**AI 智能路由器 + X-Layer 链上微支付**
 
-Free models (DeepSeek, Qwen) work out of the box. Paid models (Claude Sonnet 4.6, GPT-5.4, Gemini 3.1 Pro) pay per-request via USDC on X Layer.
+免费模型即开即用，付费模型按次付费 (USDC on X-Layer)
 
-## Quick Start
+## 🚀 一键安装
 
 ```bash
-# Install (one-liner)
 curl -fsSL https://raw.githubusercontent.com/Metaeden/okxclawrouter/main/install.sh | bash
-
-# Start the router
-okxclawrouter
-
-# Point your AI tool to:
-# API Base URL: http://localhost:8402/v1
 ```
 
-## Architecture
+然后启动：
+```bash
+okxclawrouter
+```
+
+AI 工具配置 (Cursor / VS Code / 任何 OpenAI 兼容工具)：
+```
+API Base URL: http://localhost:8402/v1
+```
+
+## 🧠 智能路由
+
+自动选择最优模型 — 免费模型免费用，付费模型按需付费。
+
+| 模型 | 层级 | 费用 |
+|------|------|------|
+| `free/deepseek-chat` | 🆓 FREE | $0 |
+| `free/deepseek-r1` | 🆓 FREE | $0 |
+| `free/qwen3` | 🆓 FREE | $0 |
+| `paid/claude-sonnet-4-6` | 💰 PAID | $0.01/req |
+| `paid/gpt-5.4` | 💰 PAID | $0.01/req |
+| `paid/gemini-3.1-pro` | 💰 PAID | $0.008/req |
+
+## 💰 解锁付费模型
+
+1. 安装 onchainos: `npm install -g onchainos`
+2. 登录: `/wallet login <你的邮箱>`
+3. 充值: 发送 USDC 到 X-Layer 钱包 → https://web3.okx.com/onchainos
+4. 使用: 连接钱包后付费模型自动生效
+
+> 约 $1 USDC ≈ 100 次 Claude Sonnet 请求
+
+## ⚙️ 命令
+
+| 命令 | 说明 |
+|------|------|
+| `/help` | 查看帮助 |
+| `/models` | 查看模型列表 |
+| `/wallet status` | 钱包状态 |
+| `/wallet login <email>` | 登录钱包 |
+| `/wallet logout` | 断开钱包 |
+| `/stats` | 使用统计 |
+| `/tier [free\|paid\|auto]` | 切换路由模式 |
+
+## 🏗️ 架构
 
 ```
 AI Agent (Cursor/VS Code) → Local Proxy (:8402) → Backend (:4002) → OpenRouter
@@ -25,49 +62,17 @@ AI Agent (Cursor/VS Code) → Local Proxy (:8402) → Backend (:4002) → OpenRo
                           onchainos CLI (x402 payment)
 ```
 
-**Two deployment units:**
-- `proxy/` — Local proxy on user machine (localhost:8402)
-- `backend/` — Your cloud server with x402 payment wall (port 4002)
+两个部署单元：
+- `proxy/` — 本地代理 (用户机器, localhost:8402)
+- `backend/` — 云端服务 + x402 支付网关 (port 4002)
 
-## Models
-
-| Model | Tier | Cost |
-|-------|------|------|
-| `free/deepseek-chat` | FREE | $0 |
-| `free/deepseek-r1` | FREE | $0 |
-| `free/qwen3` | FREE | $0 |
-| `paid/claude-sonnet-4-6` | PAID | $0.01/req |
-| `paid/gpt-5.4` | PAID | $0.01/req |
-| `paid/gemini-3.1-pro` | PAID | $0.008/req |
-
-## Using Paid Models
-
-1. Install onchainos: `npm install -g onchainos`
-2. Login: `/wallet login <your-email>`
-3. Fund: Send USDC to your wallet on X Layer → https://web3.okx.com/onchainos
-4. Use: Paid models auto-selected when wallet is connected
-
-~$1 USDC = ~100 requests to Claude Sonnet 4.6.
-
-## Commands
-
-| Command | Description |
-|---------|-------------|
-| `/wallet login <email>` | Login to OKX Agentic Wallet |
-| `/wallet status` | Check wallet and balance |
-| `/wallet logout` | Disconnect wallet |
-| `/stats` | View usage statistics |
-| `/models` | List all models |
-| `/tier [free\|paid\|auto]` | Force tier or auto-route |
-| `/help` | Show help |
-
-## Development
+## 🛠️ 开发
 
 ```bash
 # Backend
 cd backend
 npm install
-cp .env.example .env  # Fill in your keys
+cp .env.example .env  # 填入你的密钥
 npm run dev
 
 # Proxy
@@ -75,36 +80,28 @@ cd proxy
 npm install
 npm run dev
 
-# Tests
+# 测试
 cd backend && npm test
 cd proxy && npm test
 ```
 
-### Backend Environment Variables
+### Backend 环境变量
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `OKX_API_KEY` | Yes | OKX Facilitator API key |
-| `OKX_SECRET_KEY` | Yes | OKX Facilitator secret |
-| `OKX_PASSPHRASE` | Yes | OKX Facilitator passphrase |
-| `PAY_TO_ADDRESS` | Yes | Your wallet address on X Layer |
-| `OPENROUTER_API_KEY` | Yes | OpenRouter API key |
-| `PORT` | No | Server port (default: 4002) |
+| 变量 | 必填 | 说明 |
+|------|------|------|
+| `OKX_API_KEY` | ✅ | OKX Facilitator API key |
+| `OKX_SECRET_KEY` | ✅ | OKX Facilitator secret |
+| `OKX_PASSPHRASE` | ✅ | OKX Facilitator passphrase |
+| `PAY_TO_ADDRESS` | ✅ | X-Layer 收款钱包地址 |
+| `OPENROUTER_API_KEY` | ✅ | OpenRouter API key |
+| `PORT` | ❌ | 端口 (默认: 4002) |
 
-### Proxy Environment Variables
+### Proxy 环境变量
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `OKX_ROUTER_BACKEND` | `http://130.162.140.123:4002` | Backend URL (pre-configured) |
-| `OKX_ROUTER_PORT` | 8402 | Local proxy port |
-
-## Deploy Backend
-
-```bash
-cd backend
-docker build -t okxclawrouter-backend .
-docker run -p 4002:4002 --env-file .env okxclawrouter-backend
-```
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `OKX_ROUTER_BACKEND` | `http://130.162.140.123:4002` | 后端地址 (已预配置) |
+| `OKX_ROUTER_PORT` | 8402 | 本地代理端口 |
 
 ## License
 
