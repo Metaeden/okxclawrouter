@@ -6,13 +6,22 @@ import { handleX402Payment, InsufficientBalanceError } from "./x402-handler.js";
 import { fetchWithRetry } from "./retry.js";
 import { RequestDeduplicator, type CachedResponse } from "./dedup.js";
 import { ResponseCache } from "./response-cache.js";
+import { categorizeError, recordModelError, isModelAvailable, getCooldownStatus } from "./error-categorizer.js";
+import { SpendControl } from "./spend-control.js";
 import { stats } from "./stats.js";
 import { log } from "./logger.js";
 import type { ChatMessage } from "./router/types.js";
 
-// Instantiate production-grade cache and deduplicator (ported from ClawRouter)
+// --- Production-grade modules (ported from ClawRouter) ---
 const responseCache = new ResponseCache({ maxSize: 200, defaultTTL: 300 });
 const deduplicator = new RequestDeduplicator(30_000);
+const spendControl = new SpendControl();
+
+// --- SSE heartbeat interval (ms) ---
+const HEARTBEAT_INTERVAL_MS = 2_000;
+
+// --- Message truncation limit ---
+const MAX_MESSAGES = 200;
 
 let cachedWalletConnected: boolean | null = null;
 let walletCheckTimestamp = 0;
@@ -40,13 +49,61 @@ export function getCacheStats() {
   return responseCache.getStats();
 }
 
+/** Expose cooldown status for /stats CLI command */
+export function getModelCooldowns() {
+  return getCooldownStatus();
+}
+
+/** Expose spend control for /stats and /spend CLI commands */
+export function getSpendSummary() {
+  return spendControl.getSummary();
+}
+
+/** Set spend limits from CLI */
+export function setSpendLimits(limits: Parameters<SpendControl["setLimits"]>[0]) {
+  spendControl.setLimits(limits);
+}
+
 /**
  * Re-route to free tier when paid model fails due to balance.
- * Returns free-tier fallback models.
  */
 function freeFallbackModels(): string[] {
   return ["free/deepseek-chat", "free/deepseek-r1", "free/qwen3"];
 }
+
+/**
+ * Truncate messages to stay under the limit while preserving system messages.
+ * Ported from ClawRouter's production pattern.
+ */
+function truncateMessages(messages: ChatMessage[]): {
+  messages: ChatMessage[];
+  wasTruncated: boolean;
+} {
+  if (messages.length <= MAX_MESSAGES) {
+    return { messages, wasTruncated: false };
+  }
+
+  const systemMsgs = messages.filter((m) => m.role === "system");
+  const conversationMsgs = messages.filter((m) => m.role !== "system");
+  const maxConversation = MAX_MESSAGES - systemMsgs.length;
+  const truncated = conversationMsgs.slice(-maxConversation);
+
+  log.info(
+    `Truncated messages: ${messages.length} → ${systemMsgs.length + truncated.length} (kept ${systemMsgs.length} system + ${truncated.length} conversation)`,
+  );
+
+  return {
+    messages: [...systemMsgs, ...truncated],
+    wasTruncated: true,
+  };
+}
+
+/** Per-model price lookup for spend control */
+const MODEL_PRICES: Record<string, number> = {
+  "paid/claude-sonnet-4-6": 0.01,
+  "paid/gpt-5.4": 0.01,
+  "paid/gemini-3.1-pro": 0.008,
+};
 
 export async function handleChatCompletion(
   req: Request,
@@ -54,12 +111,12 @@ export async function handleChatCompletion(
 ): Promise<void> {
   const startTime = Date.now();
   const body = req.body;
-  const messages: ChatMessage[] = body.messages || [];
+  const rawMessages: ChatMessage[] = body.messages || [];
   const requestedModel: string | undefined = body.model;
   const isStream = body.stream === true;
 
   // Basic request validation
-  if (!messages.length) {
+  if (!rawMessages.length) {
     res.status(400).json({
       error: "invalid_request",
       message: "Request body must include a non-empty 'messages' array.",
@@ -67,16 +124,19 @@ export async function handleChatCompletion(
     return;
   }
 
+  // Truncate messages if over limit (preserves system prompts)
+  const { messages, wasTruncated } = truncateMessages(rawMessages);
+
   // Route the request
   const walletOk = isWalletConnected();
   const decision = route(messages, requestedModel, walletOk);
 
   log.info(
-    `Routing: tier=${decision.tier} model=${decision.model} wallet=${walletOk} stream=${isStream}`,
+    `Routing: tier=${decision.tier} model=${decision.model} wallet=${walletOk} stream=${isStream}${wasTruncated ? " [truncated]" : ""}`,
   );
 
-  // Check non-streaming response cache (using canonical key from body)
-  const bodyStr = JSON.stringify({ ...body, model: decision.model });
+  // Check non-streaming response cache
+  const bodyStr = JSON.stringify({ ...body, model: decision.model, messages });
   if (!isStream) {
     const cacheKey = ResponseCache.generateKey(bodyStr);
     const cached = responseCache.get(cacheKey);
@@ -99,20 +159,40 @@ export async function handleChatCompletion(
     }
   }
 
-  // Build model fallback chain.
-  // If paid model fails due to insufficient balance, append free models.
+  // Build model fallback chain
   const modelsToTry = [decision.model, ...decision.fallbacks];
   let balanceWarningEmitted = false;
 
   for (let i = 0; i < modelsToTry.length; i++) {
     const model = modelsToTry[i];
     const tier = model.startsWith("paid/") ? "paid" : "free";
+
+    // Skip models in cooldown (ported from ClawRouter)
+    if (!isModelAvailable(model)) {
+      log.info(`Skipping ${model} — in cooldown`);
+      continue;
+    }
+
+    // Spend control check for paid models
+    if (tier === "paid") {
+      const estimatedCost = MODEL_PRICES[model] ?? 0.01;
+      const spendCheck = spendControl.check(estimatedCost);
+      if (!spendCheck.allowed) {
+        log.warn(`Spend limit blocked ${model}: ${spendCheck.message}`);
+        // Fall back to free if spend limit hit
+        if (!modelsToTry.some((m, j) => j > i && m.startsWith("free/"))) {
+          modelsToTry.push(...freeFallbackModels());
+        }
+        continue;
+      }
+    }
+
     const path =
       tier === "free"
         ? "/v1/free/chat/completions"
         : "/v1/paid/chat/completions";
     const upstreamUrl = `${config.backendUrl}${path}`;
-    const upstreamBody = JSON.stringify({ ...body, model });
+    const upstreamBody = JSON.stringify({ ...body, model, messages });
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     };
@@ -121,27 +201,24 @@ export async function handleChatCompletion(
       let upstreamRes: globalThis.Response;
 
       if (!isStream) {
-        // Use request deduplication for non-streaming requests
+        // ===== Non-streaming path: dedup + cache =====
         const dedupKey = RequestDeduplicator.hash(upstreamBody);
 
-        // Check completed cache first
         const cachedResult = deduplicator.getCached(dedupKey);
         if (cachedResult) {
-          log.debug(`Dedup cache hit: ${model} (key=${dedupKey.slice(0, 8)})`);
+          log.debug(`Dedup cache hit: ${model}`);
           sendCachedResponse(res, cachedResult, model, decision.tier, startTime, balanceWarningEmitted);
           return;
         }
 
-        // Check if in-flight
         const inflightPromise = deduplicator.getInflight(dedupKey);
         if (inflightPromise) {
-          log.debug(`Dedup inflight hit: ${model} — waiting on original`);
+          log.debug(`Dedup inflight hit: ${model} — waiting`);
           const result = await inflightPromise;
           sendCachedResponse(res, result, model, decision.tier, startTime, balanceWarningEmitted);
           return;
         }
 
-        // Mark as in-flight and execute
         deduplicator.markInflight(dedupKey);
         try {
           upstreamRes = await fetchWithRetry(upstreamUrl, {
@@ -165,13 +242,17 @@ export async function handleChatCompletion(
               headers,
               upstreamBody,
             );
+            // Record spend on successful payment
+            if (upstreamRes.status >= 200 && upstreamRes.status < 300) {
+              const cost = MODEL_PRICES[model] ?? 0.01;
+              spendControl.record(cost, model);
+            }
           } catch (payErr) {
             if (payErr instanceof InsufficientBalanceError) {
               log.warn("Insufficient balance, falling back to free models");
               balanceWarningEmitted = true;
               const remaining = modelsToTry.slice(i + 1);
-              const hasFree = remaining.some((m) => m.startsWith("free/"));
-              if (!hasFree) {
+              if (!remaining.some((m) => m.startsWith("free/"))) {
                 modelsToTry.push(...freeFallbackModels());
               }
               continue;
@@ -181,14 +262,22 @@ export async function handleChatCompletion(
           }
         }
 
-        // If still not 2xx, complete dedup with error and try fallback
-        if (upstreamRes.status >= 400 && i < modelsToTry.length - 1) {
-          deduplicator.removeInflight(dedupKey);
-          log.warn(`Model ${model} returned ${upstreamRes.status}, trying fallback`);
-          continue;
+        // Categorize errors and apply cooldown
+        if (upstreamRes.status >= 400) {
+          const errorBody = await upstreamRes.clone().text().catch(() => "");
+          const category = categorizeError(upstreamRes.status, errorBody);
+          if (category && category !== "payment_error") {
+            recordModelError(model, category);
+          }
+
+          if (i < modelsToTry.length - 1) {
+            deduplicator.removeInflight(dedupKey);
+            log.warn(`Model ${model} returned ${upstreamRes.status} (${category}), trying fallback`);
+            continue;
+          }
         }
 
-        // Read full response body for caching + dedup completion
+        // Read full body for caching + dedup
         const chunks: Uint8Array[] = [];
         if (upstreamRes.body) {
           const reader = upstreamRes.body.getReader();
@@ -206,7 +295,7 @@ export async function handleChatCompletion(
           }
         }
 
-        // Inject balance warning into JSON response
+        // Inject balance warning
         if (balanceWarningEmitted) {
           try {
             const parsed = JSON.parse(responseBody);
@@ -218,35 +307,36 @@ export async function handleChatCompletion(
             };
             responseBody = JSON.stringify(parsed);
           } catch {
-            // Not JSON, leave as-is
+            // Not JSON
           }
         }
 
-        // Complete dedup — notify waiters
-        const dedupResult: CachedResponse = {
+        // Complete dedup
+        deduplicator.complete(dedupKey, {
           status: upstreamRes.status,
           headers: responseHeaders,
           body: responseBody,
           completedAt: Date.now(),
-        };
-        deduplicator.complete(dedupKey, dedupResult);
+        });
 
-        // Also populate response cache
-        const cacheKey = ResponseCache.generateKey(upstreamBody);
-        responseCache.set(cacheKey, {
+        // Populate response cache
+        responseCache.set(ResponseCache.generateKey(upstreamBody), {
           body: responseBody,
           status: upstreamRes.status,
           headers: responseHeaders,
           model,
         });
 
-        // Send response to client
+        // Send response
         res.status(upstreamRes.status);
         for (const [k, v] of Object.entries(responseHeaders)) {
           res.setHeader(k, v);
         }
         if (balanceWarningEmitted) {
           res.setHeader("X-Router-Warning", "insufficient_balance:switched_to_free");
+        }
+        if (wasTruncated) {
+          res.setHeader("X-Router-Truncated", "true");
         }
         res.setHeader("X-Cache", "MISS");
         res.end(responseBody);
@@ -259,17 +349,18 @@ export async function handleChatCompletion(
           success: upstreamRes.status >= 200 && upstreamRes.status < 300,
         });
         return;
+
       } else {
-        // Streaming — no dedup or caching
+        // ===== Streaming path: heartbeat + relay =====
         upstreamRes = await fetchWithRetry(upstreamUrl, {
           method: "POST",
           headers,
           body: upstreamBody,
         });
 
-        // Handle 402 — payment required
+        // Handle 402
         if (upstreamRes.status === 402) {
-          log.info("Received 402, initiating x402 payment...");
+          log.info("Received 402 (stream), initiating x402 payment...");
           try {
             upstreamRes = await handleX402Payment(
               upstreamRes,
@@ -277,13 +368,16 @@ export async function handleChatCompletion(
               headers,
               upstreamBody,
             );
+            if (upstreamRes.status >= 200 && upstreamRes.status < 300) {
+              const cost = MODEL_PRICES[model] ?? 0.01;
+              spendControl.record(cost, model);
+            }
           } catch (payErr) {
             if (payErr instanceof InsufficientBalanceError) {
               log.warn("Insufficient balance, falling back to free models");
               balanceWarningEmitted = true;
               const remaining = modelsToTry.slice(i + 1);
-              const hasFree = remaining.some((m) => m.startsWith("free/"));
-              if (!hasFree) {
+              if (!remaining.some((m) => m.startsWith("free/"))) {
                 modelsToTry.push(...freeFallbackModels());
               }
               continue;
@@ -293,13 +387,19 @@ export async function handleChatCompletion(
           }
         }
 
-        // If still not 2xx, try next fallback
-        if (upstreamRes.status >= 400 && i < modelsToTry.length - 1) {
-          log.warn(`Model ${model} returned ${upstreamRes.status}, trying fallback`);
-          continue;
+        // Categorize errors and apply cooldown
+        if (upstreamRes.status >= 400) {
+          const category = categorizeError(upstreamRes.status);
+          if (category && category !== "payment_error") {
+            recordModelError(model, category);
+          }
+          if (i < modelsToTry.length - 1) {
+            log.warn(`Model ${model} returned ${upstreamRes.status} (${category}), trying fallback`);
+            continue;
+          }
         }
 
-        // Forward streaming response to client
+        // Set SSE headers and start streaming
         res.status(upstreamRes.status);
         for (const [key, value] of upstreamRes.headers.entries()) {
           if (!["transfer-encoding", "connection"].includes(key.toLowerCase())) {
@@ -309,22 +409,38 @@ export async function handleChatCompletion(
         if (balanceWarningEmitted) {
           res.setHeader("X-Router-Warning", "insufficient_balance:switched_to_free");
         }
+        if (wasTruncated) {
+          res.setHeader("X-Router-Truncated", "true");
+        }
 
         if (!upstreamRes.body) {
           res.end();
           return;
         }
 
-        // Inject balance warning as SSE comment before stream data
+        // Inject balance warning as SSE comment
         if (balanceWarningEmitted) {
-          const warning = buildBalanceWarningSSE(model);
-          res.write(warning);
+          res.write(buildBalanceWarningSSE(model));
+        }
+
+        // Start SSE heartbeat to prevent client timeout (ported from ClawRouter)
+        let heartbeatInterval: ReturnType<typeof setInterval> | undefined;
+        if (!res.destroyed) {
+          res.write(": heartbeat\n\n");
+          heartbeatInterval = setInterval(() => {
+            if (!res.destroyed && !res.writableEnded) {
+              res.write(": heartbeat\n\n");
+            } else {
+              clearInterval(heartbeatInterval);
+              heartbeatInterval = undefined;
+            }
+          }, HEARTBEAT_INTERVAL_MS);
         }
 
         const reader = upstreamRes.body.getReader();
-        // Cancel upstream reader if client disconnects
         const onClose = () => reader.cancel().catch(() => {});
         res.on("close", onClose);
+
         try {
           while (true) {
             const { done, value } = await reader.read();
@@ -334,6 +450,7 @@ export async function handleChatCompletion(
         } catch (err) {
           log.debug("Stream relay interrupted:", err);
         } finally {
+          if (heartbeatInterval) clearInterval(heartbeatInterval);
           res.removeListener("close", onClose);
           if (!res.writableEnded) res.end();
         }
@@ -350,7 +467,7 @@ export async function handleChatCompletion(
     } catch (err: any) {
       log.error(`Error with model ${model}:`, err);
 
-      // Detect backend unreachable — no point trying other models on same backend
+      // Detect backend unreachable
       const isConnErr =
         err?.cause?.code === "ECONNREFUSED" ||
         err?.cause?.code === "ECONNRESET" ||
