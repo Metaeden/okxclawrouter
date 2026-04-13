@@ -7,16 +7,15 @@ export interface Config {
   forcedTier: "free" | "paid" | null;
 }
 
-const backendUrl = process.env.OKX_ROUTER_BACKEND || "";
+// Deployed backend on Oracle Cloud (X-Layer OKXClawRouter)
+const DEFAULT_BACKEND = "http://130.162.140.123:4002";
 
-if (!backendUrl) {
-  console.error(
-    "FATAL: OKX_ROUTER_BACKEND environment variable is required.",
+const backendUrl = process.env.OKX_ROUTER_BACKEND || DEFAULT_BACKEND;
+
+if (!process.env.OKX_ROUTER_BACKEND) {
+  console.log(
+    `OKX_ROUTER_BACKEND not set — using default: ${DEFAULT_BACKEND}`,
   );
-  console.error(
-    "  Set it to your deployed backend URL, e.g.: export OKX_ROUTER_BACKEND=https://api.yourdomain.com",
-  );
-  process.exit(1);
 }
 
 const config: Config = {
