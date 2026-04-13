@@ -176,6 +176,13 @@ if [ -f "$OPENCLAW_CONFIG" ]; then
         { id: 'paid/gemini-3.1-pro',    name: 'okxclawrouter 💰 Gemini 3.1 Pro',    api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0.008,output:0.008,cacheRead:0,cacheWrite:0}, contextWindow: 1050000, maxTokens: 65536 }
       ]
     };
+    // Register models in agents.defaults.models so OpenClaw shows them in the UI
+    if (!cfg.agents) cfg.agents = {};
+    if (!cfg.agents.defaults) cfg.agents.defaults = {};
+    if (!cfg.agents.defaults.models) cfg.agents.defaults.models = {};
+    cfg.models.providers.okxclawrouter.models.forEach(function(m) {
+      cfg.agents.defaults.models['okxclawrouter/' + m.id] = {};
+    });
     fs.writeFileSync('$OPENCLAW_CONFIG', JSON.stringify(cfg, null, 2));
     console.log('OK');
   " 2>&1
