@@ -72,17 +72,20 @@ export async function proxyToOpenRouter(
     return;
   }
 
-  // Stream the response body through
+  // Stream the response body through — cancel upstream if client disconnects
   const reader = upstreamRes.body.getReader();
+  const onClose = () => reader.cancel().catch(() => {});
+  res.on("close", onClose);
   try {
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done || res.destroyed) break;
       res.write(value);
     }
   } catch (err) {
     console.error("Stream relay error:", err);
   } finally {
-    res.end();
+    res.removeListener("close", onClose);
+    if (!res.writableEnded) res.end();
   }
 }

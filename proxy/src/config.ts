@@ -7,9 +7,21 @@ export interface Config {
   forcedTier: "free" | "paid" | null;
 }
 
+const backendUrl = process.env.OKX_ROUTER_BACKEND || "";
+
+if (!backendUrl) {
+  console.error(
+    "FATAL: OKX_ROUTER_BACKEND environment variable is required.",
+  );
+  console.error(
+    "  Set it to your deployed backend URL, e.g.: export OKX_ROUTER_BACKEND=https://api.yourdomain.com",
+  );
+  process.exit(1);
+}
+
 const config: Config = {
   port: parseInt(process.env.OKX_ROUTER_PORT || "8402", 10),
-  backendUrl: process.env.OKX_ROUTER_BACKEND || "https://your-domain.com",
+  backendUrl,
   forcedTier: null,
 };
 

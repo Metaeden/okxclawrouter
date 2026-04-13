@@ -1,4 +1,4 @@
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 import { log } from "./logger.js";
 
 interface PaymentResult {
@@ -47,8 +47,10 @@ export async function handleX402Payment(
 
   let paymentResult: PaymentResult;
   try {
-    const output = execSync(
-      `onchainos payment x402-pay --accepts '${acceptsJson}'`,
+    // Use execFileSync to avoid shell injection — args passed as array, not shell string
+    const output = execFileSync(
+      "onchainos",
+      ["payment", "x402-pay", "--accepts", acceptsJson],
       { encoding: "utf-8", stdio: "pipe" },
     );
     paymentResult = JSON.parse(output);

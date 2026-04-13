@@ -35,10 +35,15 @@ export function dedup(
     return existing.promise;
   }
 
-  const promise = executor().finally(() => {
-    // Clean up after completion + grace period
-    setTimeout(() => pending.delete(key), DEDUP_WINDOW_MS);
-  });
+  const promise = executor()
+    .catch((err: unknown) => {
+      // On rejection, immediately remove so next caller retries fresh
+      pending.delete(key);
+      throw err;
+    })
+    .finally(() => {
+      setTimeout(() => pending.delete(key), DEDUP_WINDOW_MS);
+    });
 
   pending.set(key, { promise, timestamp: now });
   return promise;

@@ -193,16 +193,20 @@ export async function handleChatCompletion(
           res.write(warning);
         }
         const reader = upstreamRes.body.getReader();
+        // Cancel upstream reader if client disconnects
+        const onClose = () => reader.cancel().catch(() => {});
+        res.on("close", onClose);
         try {
           while (true) {
             const { done, value } = await reader.read();
-            if (done) break;
+            if (done || res.destroyed) break;
             res.write(value);
           }
         } catch (err) {
           log.debug("Stream relay interrupted:", err);
         } finally {
-          res.end();
+          res.removeListener("close", onClose);
+          if (!res.writableEnded) res.end();
         }
       } else {
         const chunks: Uint8Array[] = [];
@@ -246,8 +250,29 @@ export async function handleChatCompletion(
         success: upstreamRes.status >= 200 && upstreamRes.status < 300,
       });
       return;
-    } catch (err) {
+    } catch (err: any) {
       log.error(`Error with model ${model}:`, err);
+
+      // Detect backend unreachable — no point trying other models on same backend
+      const isConnErr =
+        err?.cause?.code === "ECONNREFUSED" ||
+        err?.cause?.code === "ECONNRESET" ||
+        err?.cause?.code === "ENOTFOUND";
+      if (isConnErr) {
+        res.status(503).json({
+          error: "backend_unavailable",
+          message: `Backend at ${config.backendUrl} is unreachable. Check your deployment.`,
+        });
+        stats.record({
+          model,
+          tier: decision.tier,
+          timestamp: Date.now(),
+          latencyMs: Date.now() - startTime,
+          success: false,
+        });
+        return;
+      }
+
       if (i < modelsToTry.length - 1) continue;
 
       res.status(502).json({
