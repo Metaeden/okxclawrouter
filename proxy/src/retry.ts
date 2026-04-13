@@ -16,6 +16,8 @@ export type RetryConfig = {
   baseDelayMs: number;
   /** HTTP status codes that trigger a retry (default: [429, 502, 503, 504]) */
   retryableCodes: number[];
+  /** Request timeout in ms (default: 120000 = 2 minutes) */
+  timeoutMs: number;
 };
 
 /** Default retry configuration */
@@ -23,6 +25,7 @@ export const DEFAULT_RETRY_CONFIG: RetryConfig = {
   maxRetries: 2,
   baseDelayMs: 500,
   retryableCodes: [429, 502, 503, 504],
+  timeoutMs: 120_000,
 };
 
 /** Sleep for a given number of milliseconds */
@@ -55,7 +58,8 @@ export async function fetchWithRetry(
 
   for (let attempt = 0; attempt <= cfg.maxRetries; attempt++) {
     try {
-      const response = await fetch(url, init);
+      const fetchInit = { ...init, signal: AbortSignal.timeout(cfg.timeoutMs) };
+      const response = await fetch(url, fetchInit);
 
       // 402 payment required — never retry, caller handles x402 flow
       if (response.status === 402) {

@@ -101,7 +101,7 @@ export async function handleX402Payment(
     ).toString("base64");
   }
 
-  // Step 4: Retry with payment credential
+  // Step 4: Retry with payment credential (120s timeout)
   return fetch(originalUrl, {
     method: "POST",
     headers: {
@@ -109,5 +109,6 @@ export async function handleX402Payment(
       [headerName]: headerValue,
     },
     body: originalBody,
+    signal: AbortSignal.timeout(120_000),
   });
 }

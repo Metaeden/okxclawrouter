@@ -29,6 +29,21 @@ const PAY_TO = process.env.PAY_TO_ADDRESS!;
 const app = express();
 app.use(express.json({ limit: "10mb" }));
 
+// ── CORS — allow local proxy and browser clients ─────────────
+app.use((_req: Request, res: Response, next: NextFunction) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, X-PAYMENT, PAYMENT-SIGNATURE, PAYMENT-REQUIRED",
+  );
+  if (_req.method === "OPTIONS") {
+    res.status(204).end();
+    return;
+  }
+  next();
+});
+
 // ── Request logging ───────────────────────────────────────────
 app.use((req: Request, _res: Response, next: NextFunction) => {
   const start = Date.now();
@@ -116,12 +131,29 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 });
 
 // ── Start ──────────────────────────────────────────────────────
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`OKXClawRouter Backend running on :${PORT}`);
   console.log(`  Free route:  POST /v1/free/chat/completions`);
   console.log(`  Paid route:  POST /v1/paid/chat/completions (x402)`);
   console.log(`  Models:      GET  /v1/models`);
   console.log(`  Health:      GET  /health`);
 });
+
+// ── Graceful shutdown ─────────────────────────────────────────
+function shutdown(signal: string) {
+  console.log(`\n${signal} received — shutting down gracefully...`);
+  server.close(() => {
+    console.log("Server closed.");
+    process.exit(0);
+  });
+  // Force exit after 10s if connections still hanging
+  setTimeout(() => {
+    console.error("Forced shutdown after timeout.");
+    process.exit(1);
+  }, 10_000);
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
 
 export default app;

@@ -38,7 +38,7 @@ export async function proxyToOpenRouter(
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${OPENROUTER_KEY}`,
-        "HTTP-Referer": process.env.SITE_URL || "https://okx-llm-router.example.com",
+        "HTTP-Referer": process.env.SITE_URL || "https://github.com/user/okxclawrouter",
       },
       body: JSON.stringify({ ...body, model: openRouterModel }),
       signal: AbortSignal.timeout(120_000), // 2-minute timeout
