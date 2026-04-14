@@ -1,8 +1,8 @@
 import type { Request, Response } from "express";
 import config from "./config.js";
 import { route } from "./router/simple-router.js";
-import { checkWalletStatus } from "./onchainos-wallet.js";
-import { handleX402Payment, InsufficientBalanceError } from "./x402-handler.js";
+import { checkWalletStatus, getXLayerUsdcBalance } from "./onchainos-wallet.js";
+import { handleX402Payment, InsufficientBalanceError, PaymentBlockedByScanError } from "./x402-handler.js";
 import { fetchWithRetry } from "./retry.js";
 import { RequestDeduplicator, type CachedResponse } from "./dedup.js";
 import { ResponseCache } from "./response-cache.js";
@@ -10,12 +10,17 @@ import { categorizeError, recordModelError, isModelAvailable, getCooldownStatus 
 import { SpendControl } from "./spend-control.js";
 import { stats } from "./stats.js";
 import { log } from "./logger.js";
+import { loadPolicy } from "./policy.js";
+import { executeAutoTopup, buildTopupWarning } from "./auto-topup.js";
 import type { ChatMessage } from "./router/types.js";
 
-// --- Production-grade modules (ported from ClawRouter) ---
+// --- Production-grade modules ---
 const responseCache = new ResponseCache({ maxSize: 200, defaultTTL: 300 });
 const deduplicator = new RequestDeduplicator(30_000);
-const spendControl = new SpendControl();
+
+// 从持久化 policy 加载 spend limits，而非纯内存默认值
+const _initialPolicy = loadPolicy();
+const spendControl = new SpendControl(_initialPolicy.spendLimits);
 
 // --- SSE heartbeat interval (ms) ---
 const HEARTBEAT_INTERVAL_MS = 2_000;
@@ -162,6 +167,7 @@ export async function handleChatCompletion(
   // Build model fallback chain
   const modelsToTry = [decision.model, ...decision.fallbacks];
   let balanceWarningEmitted = false;
+  let balanceWarningDetail: object | undefined;
 
   for (let i = 0; i < modelsToTry.length; i++) {
     const model = modelsToTry[i];
@@ -242,27 +248,60 @@ export async function handleChatCompletion(
               headers,
               upstreamBody,
             );
-            // Record spend on successful payment
             if (upstreamRes.status >= 200 && upstreamRes.status < 300) {
               const cost = MODEL_PRICES[model] ?? 0.01;
               spendControl.record(cost, model);
             }
           } catch (payErr) {
             if (payErr instanceof InsufficientBalanceError) {
-              log.warn("Insufficient balance, falling back to free models");
+              log.warn("USDC 余额不足，尝试自动补仓...");
+              const policy = loadPolicy();
+
+              // 尝试 auto-topup（如 policy 开启）
+              if (policy.autoTopup.enabled) {
+                const walletStatus = checkWalletStatus();
+                if (walletStatus.address) {
+                  const topupResult = await executeAutoTopup(
+                    walletStatus.address,
+                    policy.autoTopup,
+                  );
+                  if (topupResult.success) {
+                    log.info(`自动补仓成功: $${topupResult.amountUsd} USDC，重试付费模型`);
+                    // 补仓后重试当前模型（重新加入队列头部）
+                    modelsToTry.splice(i, 0, model);
+                    continue;
+                  }
+                  log.warn(`自动补仓失败: ${topupResult.error}，降级至免费模型`);
+                }
+              }
+
               balanceWarningEmitted = true;
+              const currentBalance = getXLayerUsdcBalance();
+              balanceWarningDetail = buildTopupWarning(currentBalance) as any;
               const remaining = modelsToTry.slice(i + 1);
               if (!remaining.some((m) => m.startsWith("free/"))) {
                 modelsToTry.push(...freeFallbackModels());
               }
               continue;
             }
-            log.warn("Payment failed, trying fallback:", payErr);
+
+            if (payErr instanceof PaymentBlockedByScanError) {
+              log.error(`支付被安全扫描拦截: ${payErr.reason}`);
+              deduplicator.removeInflight(dedupKey);
+              res.status(403).json({
+                error: "payment_blocked_by_security_scan",
+                message: payErr.message,
+                action: "运行 /wallet status 检查钱包，或通过 /policy security.scanPayments=false 临时关闭扫描",
+              });
+              return;
+            }
+
+            log.warn("支付失败，尝试降级:", payErr);
             continue;
           }
         }
 
-        // Categorize errors and apply cooldown
+        // 按错误类型分类并加入冷却
         if (upstreamRes.status >= 400) {
           const errorBody = await upstreamRes.clone().text().catch(() => "");
           const category = categorizeError(upstreamRes.status, errorBody);
@@ -272,7 +311,7 @@ export async function handleChatCompletion(
 
           if (i < modelsToTry.length - 1) {
             deduplicator.removeInflight(dedupKey);
-            log.warn(`Model ${model} returned ${upstreamRes.status} (${category}), trying fallback`);
+            log.warn(`模型 ${model} 返回 ${upstreamRes.status} (${category})，切换备用`);
             continue;
           }
         }
@@ -295,19 +334,17 @@ export async function handleChatCompletion(
           }
         }
 
-        // Inject balance warning
+        // 注入余额不足警告（含 auto-topup 提示）
         if (balanceWarningEmitted) {
           try {
             const parsed = JSON.parse(responseBody);
             parsed._router_warning = {
-              type: "insufficient_balance",
-              message: "USDC balance insufficient. Switched to free model automatically.",
-              action: "Recharge at https://web3.okx.com/onchainos (X Layer network)",
+              ...(balanceWarningDetail ?? {}),
               actual_model: model,
             };
             responseBody = JSON.stringify(parsed);
           } catch {
-            // Not JSON
+            // 非 JSON 响应，忽略
           }
         }
 
@@ -374,27 +411,38 @@ export async function handleChatCompletion(
             }
           } catch (payErr) {
             if (payErr instanceof InsufficientBalanceError) {
-              log.warn("Insufficient balance, falling back to free models");
+              log.warn("USDC 余额不足（流式），降级至免费模型");
               balanceWarningEmitted = true;
+              balanceWarningDetail = buildTopupWarning(getXLayerUsdcBalance()) as any;
               const remaining = modelsToTry.slice(i + 1);
               if (!remaining.some((m) => m.startsWith("free/"))) {
                 modelsToTry.push(...freeFallbackModels());
               }
               continue;
             }
-            log.warn("Payment failed, trying fallback:", payErr);
+            if (payErr instanceof PaymentBlockedByScanError) {
+              log.error(`支付被安全扫描拦截（流式）: ${payErr.reason}`);
+              if (!res.headersSent) {
+                res.status(403).json({
+                  error: "payment_blocked_by_security_scan",
+                  message: payErr.message,
+                });
+              }
+              return;
+            }
+            log.warn("支付失败（流式），尝试降级:", payErr);
             continue;
           }
         }
 
-        // Categorize errors and apply cooldown
+        // 按错误类型分类（流式）
         if (upstreamRes.status >= 400) {
           const category = categorizeError(upstreamRes.status);
           if (category && category !== "payment_error") {
             recordModelError(model, category);
           }
           if (i < modelsToTry.length - 1) {
-            log.warn(`Model ${model} returned ${upstreamRes.status} (${category}), trying fallback`);
+            log.warn(`模型 ${model} 返回 ${upstreamRes.status} (${category})，切换备用`);
             continue;
           }
         }
@@ -536,8 +584,9 @@ function sendCachedResponse(
 
 function buildBalanceWarningSSE(fallbackModel: string): string {
   return [
-    `: [OKX Router] USDC balance insufficient — switched to free model: ${fallbackModel}`,
-    `: [OKX Router] Recharge at https://web3.okx.com/onchainos (X Layer network)`,
+    `: [OKX Router] USDC 余额不足 — 已切换至免费模型: ${fallbackModel}`,
+    `: [OKX Router] 充值地址: https://web3.okx.com/onchainos（X Layer 网络）`,
+    `: [OKX Router] 开启自动补仓: /policy autoTopup.enabled=true`,
     "",
   ].join("\n");
 }

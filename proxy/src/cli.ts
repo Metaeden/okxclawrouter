@@ -3,12 +3,16 @@ import {
   isOnchainosInstalled,
   checkWalletStatus,
   getXLayerUsdcBalance,
+  getWalletPortfolio,
+  formatPortfolio,
   walletLogin,
   walletLogout,
 } from "./onchainos-wallet.js";
 import { stats } from "./stats.js";
 import { ALL_MODELS } from "./models.js";
 import { invalidateWalletCache, getCacheStats, getModelCooldowns, getSpendSummary, setSpendLimits } from "./proxy.js";
+import { loadPolicy, savePolicy, DEFAULT_POLICY, formatPolicy, parseAndApplyPolicySetting } from "./policy.js";
+import { getTopupQuote } from "./auto-topup.js";
 
 export function handleCliCommand(command: string): string | null {
   const parts = command.trim().split(/\s+/);
@@ -26,6 +30,12 @@ export function handleCliCommand(command: string): string | null {
       return handleModels();
     case "/tier":
       return handleTier(sub);
+    case "/policy":
+      return handlePolicy(sub, parts.slice(2).join(" "));
+    case "/security":
+      return handleSecurity();
+    case "/topup":
+      return handleTopup(sub);
     case "/help":
       return handleHelp();
     default:
@@ -56,41 +66,53 @@ function handleWallet(sub: string | undefined, arg?: string): string {
 
   if (sub === "status") {
     if (!isOnchainosInstalled()) {
-      return "onchainos not installed. Free models are available without a wallet.";
+      return "onchainos 未安装。免费模型可直接使用，无需钱包。";
     }
     const status = checkWalletStatus();
     if (!status.loggedIn) {
       return [
-        "Wallet: Not logged in",
-        "Free models available. Login to use paid models:",
-        "  /wallet login <email>",
+        "钱包: 未登录",
+        "免费模型可直接使用。登录后可使用付费模型:",
+        "  /wallet login <邮箱>",
       ].join("\n");
     }
     const usdcBalance = getXLayerUsdcBalance();
     return [
-      `Wallet: Connected`,
-      `Email: ${status.email}`,
-      `X Layer address: ${status.address}`,
-      usdcBalance !== undefined ? `X Layer USDC: ${usdcBalance}` : "",
+      `钱包: 已连接`,
+      `邮箱: ${status.email}`,
+      `X-Layer 地址: ${status.address}`,
+      usdcBalance !== undefined ? `X-Layer USDC 余额: ${usdcBalance}` : "",
       "",
-      `Deposit USDC on X Layer to unlock paid models:`,
+      `在 X Layer 网络充值 USDC 以解锁付费模型:`,
       `  https://web3.okx.com/onchainos`,
     ]
       .filter(Boolean)
       .join("\n");
   }
 
+  if (sub === "portfolio") {
+    if (!isOnchainosInstalled()) {
+      return "onchainos 未安装，无法查询 portfolio。";
+    }
+    const status = checkWalletStatus();
+    if (!status.loggedIn) {
+      return "请先登录钱包: /wallet login <邮箱>";
+    }
+    const portfolio = getWalletPortfolio();
+    return formatPortfolio(portfolio);
+  }
+
   if (sub === "logout") {
     try {
       walletLogout();
       invalidateWalletCache();
-      return "Wallet logged out. You can still use free models.";
+      return "钱包已退出登录。免费模型仍然可用。";
     } catch (err) {
-      return `Logout failed: ${err}`;
+      return `退出失败: ${err}`;
     }
   }
 
-  return "Usage: /wallet [login <email> | status | logout]";
+  return "用法: /wallet [login <邮箱> | status | portfolio | logout]";
 }
 
 function handleStats(sub: string | undefined): string {
@@ -211,22 +233,115 @@ function handleTier(sub: string | undefined): string {
   return `Current tier: ${config.forcedTier || "auto"}\nUsage: /tier [free | paid | auto]`;
 }
 
+function handlePolicy(sub: string | undefined, arg: string): string {
+  if (!sub || sub === "status") {
+    const policy = loadPolicy();
+    return formatPolicy(policy);
+  }
+
+  if (sub === "set" && arg) {
+    const result = parseAndApplyPolicySetting(arg);
+    return result.message;
+  }
+
+  if (sub === "reset") {
+    savePolicy(DEFAULT_POLICY);
+    return "Policy 已重置为默认配置。";
+  }
+
+  return [
+    "用法: /policy [status | set <key=value> | reset]",
+    "",
+    "示例:",
+    "  /policy status                          查看当前配置",
+    "  /policy set security.scanPayments=true  开启支付安全扫描",
+    "  /policy set security.scanPayments=false 关闭支付安全扫描",
+    "  /policy set autoTopup.enabled=true      开启自动换币补仓",
+    "  /policy set autoTopup.maxTopupUsd=10    设置最大补仓金额 $10",
+    "  /policy set spendLimits.hourly=5        设置每小时支出上限 $5",
+    "  /policy set spendLimits.daily=20        设置每日支出上限 $20",
+    "  /policy reset                           重置为默认配置",
+  ].join("\n");
+}
+
+function handleSecurity(): string {
+  const policy = loadPolicy();
+  const status = checkWalletStatus();
+
+  return [
+    "─── 安全状态 ───────────────────────────────",
+    `  onchainos 安装:     ${isOnchainosInstalled() ? "✅ 已安装" : "❌ 未安装"}`,
+    `  钱包已连接:         ${status.loggedIn ? `✅ ${status.address ?? ""}` : "❌ 未登录"}`,
+    `  支付前扫描:         ${policy.security.scanPayments ? "✅ 开启" : "❌ 关闭"}`,
+    `  扫描失败拦截:       ${policy.security.blockOnScanFailure ? "✅ 开启" : "❌ 关闭"}`,
+    `  允许 warn 级继续:   ${policy.security.allowWarnLevel ? "✅ 是" : "❌ 否"}`,
+    "",
+    "修改安全设置: /policy set security.<key>=<value>",
+    "示例: /policy set security.scanPayments=true",
+  ].join("\n");
+}
+
+function handleTopup(sub: string | undefined): string {
+  if (sub === "quote") {
+    const status = checkWalletStatus();
+    if (!status.loggedIn || !status.address) {
+      return "请先登录钱包: /wallet login <邮箱>";
+    }
+    const policy = loadPolicy();
+    const quote = getTopupQuote(status.address, policy.autoTopup.maxTopupUsd);
+    if (!quote.feasible) {
+      return `无法获取报价，请检查 OKB 余额或网络连接。`;
+    }
+    return [
+      `换币报价 (X-Layer):`,
+      `  换出: ${quote.fromAmount} OKB（原生）`,
+      `  换入: 约 $${policy.autoTopup.maxTopupUsd} USDC`,
+      `  链: ${quote.chain}`,
+      "",
+      `执行: /policy set autoTopup.enabled=true 后，余额不足时自动触发`,
+    ].join("\n");
+  }
+
+  const policy = loadPolicy();
+  return [
+    `自动补仓状态: ${policy.autoTopup.enabled ? "✅ 开启" : "❌ 关闭"}`,
+    `触发余额: $${policy.autoTopup.triggerBelowUsd}`,
+    `最大补仓: $${policy.autoTopup.maxTopupUsd}`,
+    `换出代币: ${policy.autoTopup.fromToken === "native" ? "OKB（原生）" : "USDT"}`,
+    "",
+    "用法: /topup [quote]",
+    "  /topup quote   查询换币报价（不执行）",
+    "  /policy set autoTopup.enabled=true   开启自动补仓",
+  ].join("\n");
+}
+
 function handleHelp(): string {
   return [
-    "OKXClawRouter Commands:",
+    "OKXClawRouter 命令列表:",
     "",
-    "  /wallet login <email>  Login to Agentic Wallet",
-    "  /wallet status         Check wallet status and balance",
-    "  /wallet logout         Disconnect wallet",
-    "  /stats                 View usage statistics + cache + cooldowns",
-    "  /stats clear           Reset statistics",
-    "  /spend status          View USDC spending summary",
-    "  /spend limit key=val   Set spend limits (hourly, daily, perRequest)",
-    "  /models                List available models",
-    "  /tier [free|paid|auto] Set model tier preference",
-    "  /help                  Show this help",
+    "  /wallet login <邮箱>         登录 OKX Agentic Wallet",
+    "  /wallet status               查看钱包状态和余额",
+    "  /wallet portfolio            查看多链资产 portfolio",
+    "  /wallet logout               退出登录",
     "",
-    `Proxy running on: localhost:${config.port}`,
-    `Backend: ${config.backendUrl}`,
+    "  /policy status               查看安全策略和支出限额",
+    "  /policy set <key=val>        修改策略（持久化保存）",
+    "  /policy reset                重置为默认配置",
+    "",
+    "  /security                    查看安全状态总览",
+    "",
+    "  /topup                       查看自动补仓状态",
+    "  /topup quote                 查询 OKB→USDC 换币报价",
+    "",
+    "  /stats                       查看请求统计 + 缓存 + 冷却",
+    "  /stats clear                 重置统计",
+    "  /spend status                查看 USDC 支出摘要",
+    "  /spend limit key=val         设置支出限额",
+    "  /models                      列出可用模型",
+    "  /tier [free|paid|auto]       设置模型层级偏好",
+    "  /help                        显示帮助",
+    "",
+    `代理地址: localhost:${config.port}`,
+    `后端地址: ${config.backendUrl}`,
   ].join("\n");
 }

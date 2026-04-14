@@ -1,5 +1,8 @@
 import { execFileSync } from "child_process";
 import { log } from "./logger.js";
+import { scanPaymentTransaction, extractPaymentTarget } from "./security-scanner.js";
+import { loadPolicy } from "./policy.js";
+import { checkWalletStatus } from "./onchainos-wallet.js";
 
 interface PaymentResult {
   signature: string;
@@ -12,14 +15,25 @@ export class InsufficientBalanceError extends Error {
     public readonly required?: string,
     public readonly available?: string,
   ) {
-    super("Insufficient USDC balance for this request");
+    super("USDC 余额不足，无法完成支付");
     this.name = "InsufficientBalanceError";
   }
 }
 
+export class PaymentBlockedByScanError extends Error {
+  constructor(public readonly reason: string) {
+    super(`支付被安全扫描拦截: ${reason}`);
+    this.name = "PaymentBlockedByScanError";
+  }
+}
+
 /**
- * Handle HTTP 402 response: extract payment requirements, sign via onchainos CLI,
- * then retry the original request with payment headers.
+ * 处理 HTTP 402 响应：提取支付要求 → 安全扫描 → onchainos 签名 → 带支付头重试。
+ *
+ * 安全扫描（onchainos security tx-scan）在签名前执行：
+ *   - action=block → 抛出 PaymentBlockedByScanError，终止支付
+ *   - action=warn  → 记录警告，根据 policy.security.allowWarnLevel 决定是否继续
+ *   - 扫描失败    → 根据 policy.security.blockOnScanFailure 决定是否拦截
  */
 export async function handleX402Payment(
   response: Response,
@@ -27,7 +41,9 @@ export async function handleX402Payment(
   originalHeaders: Record<string, string>,
   originalBody: string,
 ): Promise<Response> {
-  // Step 1: Decode 402 payload — supports v2 (header) and v1 (body)
+  const policy = loadPolicy();
+
+  // Step 1: 解析 402 payload（支持 v2 header 和 v1 body 两种协议）
   let accepts: unknown[];
 
   const paymentRequired = response.headers.get("PAYMENT-REQUIRED");
@@ -41,13 +57,45 @@ export async function handleX402Payment(
     accepts = body.accepts;
   }
 
-  // Step 2: Sign via onchainos CLI
+  // Step 2: 支付前安全扫描（如 policy 开启）
+  if (policy.security.scanPayments) {
+    const walletStatus = checkWalletStatus();
+    const fromAddress = walletStatus.address;
+
+    if (fromAddress) {
+      const target = extractPaymentTarget(accepts as any[], fromAddress);
+      if (target) {
+        log.info(`安全扫描: chain=${target.chain} to=${target.to}`);
+        const scanResult = scanPaymentTransaction(target);
+
+        if (scanResult.action === "block") {
+          throw new PaymentBlockedByScanError(
+            scanResult.reason ?? "目标地址被标记为高风险",
+          );
+        }
+
+        if (scanResult.action === "warn") {
+          log.warn(`支付扫描 WARN: ${scanResult.reason}`);
+          if (!policy.security.allowWarnLevel) {
+            throw new PaymentBlockedByScanError(
+              `风险提示（policy 配置为拒绝 warn 级别）: ${scanResult.reason}`,
+            );
+          }
+        }
+      } else {
+        log.debug("无法提取支付目标，跳过安全扫描");
+      }
+    } else {
+      log.debug("未获取到钱包地址，跳过安全扫描");
+    }
+  }
+
+  // Step 3: 通过 onchainos 签名
   const acceptsJson = JSON.stringify(accepts);
-  log.debug("x402 payment request:", acceptsJson);
+  log.debug("x402 支付请求:", acceptsJson);
 
   let paymentResult: PaymentResult;
   try {
-    // Use execFileSync to avoid shell injection — args passed as array, not shell string
     const output = execFileSync(
       "onchainos",
       ["payment", "x402-pay", "--accepts", acceptsJson],
@@ -56,29 +104,27 @@ export async function handleX402Payment(
     paymentResult = JSON.parse(output);
   } catch (err: any) {
     const stderr = err?.stderr?.toString() || err?.message || "";
-    log.error("x402 payment signing failed:", stderr);
+    log.error("x402 签名失败:", stderr);
 
-    // Detect insufficient balance from onchainos error output
     if (
       stderr.includes("insufficient") ||
       stderr.includes("balance") ||
-      stderr.includes("not enough")
+      stderr.includes("not enough") ||
+      stderr.includes("余额")
     ) {
-      const price = (accepts[0] as any)?.price;
+      const price = (accepts[0] as any)?.price ?? (accepts[0] as any)?.maxAmountRequired;
       throw new InsufficientBalanceError(price);
     }
 
-    throw new Error(
-      "Payment signing failed. Check wallet status with /wallet status.",
-    );
+    throw new Error("支付签名失败。请运行 /wallet status 检查钱包状态。");
   }
 
-  // Step 3: Build payment header
+  // Step 4: 构造支付请求头
   let headerName: string;
   let headerValue: string;
 
   if (paymentRequired) {
-    // v2 protocol
+    // v2 协议
     headerName = "PAYMENT-SIGNATURE";
     headerValue = Buffer.from(
       JSON.stringify({
@@ -89,7 +135,7 @@ export async function handleX402Payment(
       }),
     ).toString("base64");
   } else {
-    // v1 protocol
+    // v1 协议
     headerName = "X-PAYMENT";
     headerValue = Buffer.from(
       JSON.stringify({
@@ -101,7 +147,7 @@ export async function handleX402Payment(
     ).toString("base64");
   }
 
-  // Step 4: Retry with payment credential (120s timeout)
+  // Step 5: 带支付凭证重试原始请求（120s 超时）
   return fetch(originalUrl, {
     method: "POST",
     headers: {

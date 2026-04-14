@@ -9,6 +9,7 @@ import {
   checkWalletStatus,
 } from "./onchainos-wallet.js";
 import { log } from "./logger.js";
+import { loadPolicy } from "./policy.js";
 
 const app = express();
 app.use(express.json({ limit: "10mb" }));
@@ -51,41 +52,46 @@ app.get("/health", (_req, res) => {
 app.listen(config.port, () => {
   const onchainos = isOnchainosInstalled();
   const wallet = onchainos ? checkWalletStatus() : { loggedIn: false };
+  const policy = loadPolicy();
 
   if (!onchainos) {
     console.warn(
-      "\n  [WARN] onchainos CLI not found. Paid models require onchainos for wallet & payment.",
+      "\n  [警告] onchainos CLI 未找到。付费模型需要 onchainos 支持钱包和支付。",
     );
     console.warn(
-      "         Install: npm install -g onchainos\n",
+      "         安装: npm install -g onchainos\n",
     );
   }
 
+  const secScan = policy.security.scanPayments ? "✅ 开启" : "❌ 关闭";
+  const autoTopup = policy.autoTopup.enabled ? `✅ 开启 (触发≤$${policy.autoTopup.triggerBelowUsd})` : "❌ 关闭";
+
   console.log(`
 ═══════════════════════════════════════════════════════
-  OKXClawRouter v0.1.0
+  OKXClawRouter v0.2.0  (Powered by OKX OnchainOS)
 ═══════════════════════════════════════════════════════
 
-  Proxy:     http://localhost:${config.port}
-  Backend:   ${config.backendUrl}
-  onchainos: ${onchainos ? "installed" : "NOT FOUND (only free models available)"}
-  Wallet:    ${wallet.loggedIn ? `connected (${wallet.address})` : "not connected"}
+  代理地址:   http://localhost:${config.port}
+  后端地址:   ${config.backendUrl}
+  onchainos:  ${onchainos ? "✅ 已安装" : "❌ 未找到（仅免费模型可用）"}
+  钱包状态:   ${wallet.loggedIn ? `✅ 已连接 (${wallet.address})` : "❌ 未连接"}
 
-  FREE models ready — use without login:
+  安全扫描:   ${secScan}     自动补仓: ${autoTopup}
+
+  免费模型（无需登录）:
     DeepSeek V3 / DeepSeek R1 / Qwen3
 
 ${
   wallet.loggedIn
-    ? `  PAID models ready:
+    ? `  付费模型已就绪:
     Claude Sonnet 4.6 / GPT-5.4 / Gemini 3.1 Pro`
-    : `  Want Claude Sonnet 4.6, GPT-5.4, Gemini 3.1 Pro?
-    1. Login wallet:  /wallet login <your-email>
-    2. Fund wallet:   Send USDC on X Layer network
-       -> https://web3.okx.com/onchainos
-    3. Start using:   Paid models auto-selected when wallet connected`
+    : `  解锁 Claude / GPT-5.4 / Gemini:
+    1. /wallet login <邮箱>   登录 OKX Agentic Wallet
+    2. 充值 USDC（X Layer 网络） → https://web3.okx.com/onchainos
+    3. 付费模型自动解锁`
 }
 
-  Usage stats: /stats    Models: /models    Help: /help
+  /stats   /models   /policy   /security   /help
 ═══════════════════════════════════════════════════════
 `);
 
