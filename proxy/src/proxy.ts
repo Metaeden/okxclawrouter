@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import config from "./config.js";
+import { filterSupportedModels } from "./backend-models.js";
 import { route } from "./router/simple-router.js";
 import { checkWalletStatus, getXLayerUsdcBalance } from "./onchainos-wallet.js";
 import { handleX402Payment, InsufficientBalanceError, PaymentBlockedByScanError } from "./x402-handler.js";
@@ -73,7 +74,11 @@ export function setSpendLimits(limits: Parameters<SpendControl["setLimits"]>[0])
  * Re-route to free tier when paid model fails due to balance.
  */
 function freeFallbackModels(): string[] {
-  return ["free/deepseek-chat", "free/deepseek-r1", "free/qwen3"];
+  return ["openrouter/free", "qwen/qwen3-coder:free"];
+}
+
+function isFreeModel(model: string): boolean {
+  return model === "openrouter/free" || model.endsWith(":free");
 }
 
 /**
@@ -135,6 +140,7 @@ export async function handleChatCompletion(
   // Route the request
   const walletOk = isWalletConnected();
   const decision = route(messages, requestedModel, walletOk);
+  const requestedExplicitly = requestedModel !== undefined && requestedModel !== "auto";
 
   log.info(
     `Routing: tier=${decision.tier} model=${decision.model} wallet=${walletOk} stream=${isStream}${wasTruncated ? " [truncated]" : ""}`,
@@ -165,7 +171,27 @@ export async function handleChatCompletion(
   }
 
   // Build model fallback chain
-  const modelsToTry = [decision.model, ...decision.fallbacks];
+  const modelsToTry = await filterSupportedModels([
+    decision.model,
+    ...decision.fallbacks,
+  ]);
+
+  if (requestedExplicitly && modelsToTry.length === 0) {
+    res.status(503).json({
+      error: "unsupported_model",
+      message: `Model ${decision.model} is not currently supported by backend ${config.backendUrl}.`,
+    });
+    return;
+  }
+
+  if (modelsToTry.length === 0) {
+    res.status(503).json({
+      error: "no_supported_models",
+      message: `No supported models are currently available from backend ${config.backendUrl}.`,
+    });
+    return;
+  }
+
   let balanceWarningEmitted = false;
   let balanceWarningDetail: object | undefined;
 
@@ -186,7 +212,7 @@ export async function handleChatCompletion(
       if (!spendCheck.allowed) {
         log.warn(`Spend limit blocked ${model}: ${spendCheck.message}`);
         // Fall back to free if spend limit hit
-        if (!modelsToTry.some((m, j) => j > i && m.startsWith("free/"))) {
+        if (!modelsToTry.some((m, j) => j > i && isFreeModel(m))) {
           modelsToTry.push(...freeFallbackModels());
         }
         continue;
@@ -279,7 +305,7 @@ export async function handleChatCompletion(
               const currentBalance = getXLayerUsdcBalance();
               balanceWarningDetail = buildTopupWarning(currentBalance) as any;
               const remaining = modelsToTry.slice(i + 1);
-              if (!remaining.some((m) => m.startsWith("free/"))) {
+              if (!remaining.some((m) => isFreeModel(m))) {
                 modelsToTry.push(...freeFallbackModels());
               }
               continue;
@@ -415,7 +441,7 @@ export async function handleChatCompletion(
               balanceWarningEmitted = true;
               balanceWarningDetail = buildTopupWarning(getXLayerUsdcBalance()) as any;
               const remaining = modelsToTry.slice(i + 1);
-              if (!remaining.some((m) => m.startsWith("free/"))) {
+              if (!remaining.some((m) => isFreeModel(m))) {
                 modelsToTry.push(...freeFallbackModels());
               }
               continue;

@@ -2,9 +2,9 @@ import type { ChatMessage, RoutingDecision } from "./types.js";
 import config from "../config.js";
 
 const FREE = {
-  general: "free/deepseek-chat",
-  reasoning: "free/deepseek-r1",
-  fallbacks: ["free/qwen3"],
+  general: "openrouter/free",
+  reasoning: "openrouter/free",
+  fallbacks: ["qwen/qwen3-coder:free"],
 };
 
 const PAID = {

@@ -14,7 +14,7 @@ describe("simple-router", () => {
       false,
     );
     expect(decision.tier).toBe("FREE");
-    expect(decision.model).toBe("free/deepseek-chat");
+    expect(decision.model).toBe("openrouter/free");
   });
 
   it("should route to paid model when wallet is connected", () => {
@@ -34,7 +34,7 @@ describe("simple-router", () => {
       false,
     );
     expect(decision.tier).toBe("FREE");
-    expect(decision.model).toBe("free/deepseek-r1");
+    expect(decision.model).toBe("openrouter/free");
   });
 
   it("should pick paid reasoning model when wallet connected", () => {
@@ -66,7 +66,7 @@ describe("simple-router", () => {
       true,
     );
     expect(decision.tier).toBe("FREE");
-    expect(decision.model).toBe("free/deepseek-chat");
+    expect(decision.model).toBe("openrouter/free");
   });
 
   it("should respect forcedTier=paid", () => {

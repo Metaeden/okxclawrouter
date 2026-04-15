@@ -4,9 +4,8 @@ export interface Model {
 }
 
 export const FREE_MODELS: Model[] = [
-  { id: "free/deepseek-chat", tier: "free" },
-  { id: "free/deepseek-r1", tier: "free" },
-  { id: "free/qwen3", tier: "free" },
+  { id: "openrouter/free", tier: "free" },
+  { id: "qwen/qwen3-coder:free", tier: "free" },
 ];
 
 export const PAID_MODELS: Model[] = [

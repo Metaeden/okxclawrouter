@@ -6,10 +6,9 @@ export interface ModelDef {
 }
 
 export const MODEL_MAP: Record<string, string> = {
-  // FREE tier — OpenRouter model IDs (no :free suffix for DeepSeek)
-  "free/deepseek-chat": "deepseek/deepseek-chat-v3-0324",
-  "free/deepseek-r1": "deepseek/deepseek-r1",
-  "free/qwen3": "qwen/qwen3-next-80b-a3b-instruct:free",
+  // FREE tier — explicitly zero-cost models on OpenRouter
+  "openrouter/free": "openrouter/free",
+  "qwen/qwen3-coder:free": "qwen/qwen3-coder:free",
   // PAID tier
   "paid/claude-sonnet-4-6": "anthropic/claude-sonnet-4-6",
   "paid/gpt-5.4": "openai/gpt-5.4",
@@ -20,7 +19,7 @@ export const MODEL_LIST: ModelDef[] = Object.entries(MODEL_MAP).map(
   ([id, openRouterId]) => ({
     id,
     openRouterId,
-    tier: id.startsWith("free/") ? ("free" as const) : ("paid" as const),
+    tier: id.startsWith("paid/") ? ("paid" as const) : ("free" as const),
     description: id,
   }),
 );

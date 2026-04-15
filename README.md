@@ -33,10 +33,11 @@ okxclawrouter
 
 在 OpenClaw 里切换模型：
 ```
-/model okxclawrouter/free/deepseek-chat        # 免费
+/model okxclawrouter/openrouter/free            # 免费
+/model okxclawrouter/qwen/qwen3-coder:free      # 免费
 /model okxclawrouter/paid/claude-sonnet-4-6     # 付费
-/model okxclawrouter/paid/gpt-5.4              # 付费
-/model okxclawrouter/paid/gemini-3.1-pro       # 付费
+/model okxclawrouter/paid/gpt-5.4               # 付费
+/model okxclawrouter/paid/gemini-3.1-pro        # 付费
 ```
 
 > 💡 选付费模型时，如果余额不足会自动 fallback 到免费模型，无需手动切换。
@@ -49,9 +50,8 @@ API Base URL → http://localhost:8402/v1
 
 | 模型 | 层级 | 费用 |
 |------|------|------|
-| `free/deepseek-chat` | 🆓 FREE | $0 |
-| `free/deepseek-r1` | 🆓 FREE | $0 |
-| `free/qwen3` | 🆓 FREE | $0 |
+| `openrouter/free` | 🆓 FREE | $0 |
+| `qwen/qwen3-coder:free` | 🆓 FREE | $0 |
 | `paid/claude-sonnet-4-6` | 💰 PAID | $0.01/req |
 | `paid/gpt-5.4` | 💰 PAID | $0.01/req |
 | `paid/gemini-3.1-pro` | 💰 PAID | $0.008/req |

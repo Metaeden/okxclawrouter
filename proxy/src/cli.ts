@@ -9,12 +9,12 @@ import {
   walletLogout,
 } from "./onchainos-wallet.js";
 import { stats } from "./stats.js";
-import { ALL_MODELS } from "./models.js";
+import { getAdvertisedModels } from "./backend-models.js";
 import { invalidateWalletCache, getCacheStats, getModelCooldowns, getSpendSummary, setSpendLimits } from "./proxy.js";
 import { loadPolicy, savePolicy, DEFAULT_POLICY, formatPolicy, parseAndApplyPolicySetting } from "./policy.js";
 import { getTopupQuote } from "./auto-topup.js";
 
-export function handleCliCommand(command: string): string | null {
+export async function handleCliCommand(command: string): Promise<string | null> {
   const parts = command.trim().split(/\s+/);
   const cmd = parts[0]?.toLowerCase();
   const sub = parts[1]?.toLowerCase();
@@ -195,10 +195,11 @@ function handleSpend(sub: string | undefined, arg?: string): string {
   ].join("\n");
 }
 
-function handleModels(): string {
+async function handleModels(): Promise<string> {
   const lines = ["Available models:", ""];
-  const free = ALL_MODELS.filter((m) => m.tier === "free");
-  const paid = ALL_MODELS.filter((m) => m.tier === "paid");
+  const models = await getAdvertisedModels();
+  const free = models.filter((m) => m.tier === "free");
+  const paid = models.filter((m) => m.tier === "paid");
 
   lines.push("FREE (no wallet needed):");
   for (const m of free) {

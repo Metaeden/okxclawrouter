@@ -14,7 +14,7 @@ describe("stats", () => {
 
   it("should track recorded requests", () => {
     stats.record({
-      model: "free/deepseek-chat",
+      model: "openrouter/free",
       tier: "FREE",
       timestamp: Date.now(),
       latencyMs: 100,
@@ -38,14 +38,14 @@ describe("stats", () => {
 
   it("should compute correct success rate with failures", () => {
     stats.record({
-      model: "free/deepseek-chat",
+      model: "openrouter/free",
       tier: "FREE",
       timestamp: Date.now(),
       latencyMs: 50,
       success: true,
     });
     stats.record({
-      model: "free/deepseek-chat",
+      model: "openrouter/free",
       tier: "FREE",
       timestamp: Date.now(),
       latencyMs: 50,
@@ -57,14 +57,14 @@ describe("stats", () => {
 
   it("should track model breakdown", () => {
     stats.record({
-      model: "free/deepseek-chat",
+      model: "openrouter/free",
       tier: "FREE",
       timestamp: Date.now(),
       latencyMs: 100,
       success: true,
     });
     stats.record({
-      model: "free/deepseek-chat",
+      model: "openrouter/free",
       tier: "FREE",
       timestamp: Date.now(),
       latencyMs: 100,
@@ -72,6 +72,6 @@ describe("stats", () => {
     });
 
     const s = stats.getSummary();
-    expect(s.modelBreakdown["free/deepseek-chat"]).toBe(2);
+    expect(s.modelBreakdown["openrouter/free"]).toBe(2);
   });
 });

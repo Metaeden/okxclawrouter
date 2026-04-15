@@ -3,7 +3,7 @@ import type { Request, Response, NextFunction } from "express";
 import { paymentMiddleware } from "@okxweb3/x402-express";
 import { createResourceServer, NETWORK } from "./payment.js";
 import { proxyToOpenRouter } from "./openrouter-proxy.js";
-import { MODEL_MAP, MODEL_LIST } from "./models.js";
+import { MODEL_LIST } from "./models.js";
 import { getPrice } from "./pricing.js";
 
 // ── Env validation ────────────────────────────────────────────
@@ -77,9 +77,9 @@ app.get("/v1/models", (_req, res) => {
 
 // ── Free route — no payment middleware ─────────────────────────
 app.post("/v1/free/chat/completions", (req: Request, res: Response) => {
-  // Validate the model is actually free
   const model = req.body?.model;
-  if (model && !model.startsWith("free/") && MODEL_MAP[model] !== undefined) {
+  const modelDef = model ? MODEL_LIST.find((item) => item.id === model) : undefined;
+  if (modelDef && modelDef.tier !== "free") {
     res.status(400).json({
       error: "invalid_model",
       message: `Model ${model} is not available on the free route. Use /v1/paid/chat/completions.`,

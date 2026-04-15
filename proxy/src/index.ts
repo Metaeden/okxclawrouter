@@ -2,7 +2,7 @@
 import express from "express";
 import config from "./config.js";
 import { handleChatCompletion } from "./proxy.js";
-import { ALL_MODELS } from "./models.js";
+import { getAdvertisedModels } from "./backend-models.js";
 import { handleCliCommand } from "./cli.js";
 import {
   isOnchainosInstalled,
@@ -17,10 +17,11 @@ app.use(express.json({ limit: "10mb" }));
 // ── OpenAI-compatible endpoints ───────────────────────────────
 app.post("/v1/chat/completions", handleChatCompletion);
 
-app.get("/v1/models", (_req, res) => {
+app.get("/v1/models", async (_req, res) => {
+  const models = await getAdvertisedModels();
   res.json({
     object: "list",
-    data: ALL_MODELS.map((m) => ({
+    data: models.map((m) => ({
       id: m.id,
       object: "model",
       owned_by: m.tier,
@@ -29,13 +30,13 @@ app.get("/v1/models", (_req, res) => {
 });
 
 // ── CLI command endpoint (for integration with OpenClaw / agents) ──
-app.post("/cli", (req, res) => {
+app.post("/cli", async (req, res) => {
   const { command } = req.body;
   if (!command) {
     res.status(400).json({ error: "missing_command" });
     return;
   }
-  const result = handleCliCommand(command);
+  const result = await handleCliCommand(command);
   if (result === null) {
     res.status(404).json({ error: "unknown_command", command });
     return;
@@ -54,19 +55,31 @@ app.listen(config.port, () => {
   const wallet = onchainos ? checkWalletStatus() : { loggedIn: false };
   const policy = loadPolicy();
 
-  if (!onchainos) {
-    console.warn(
-      "\n  [警告] onchainos CLI 未找到。付费模型需要 onchainos 支持钱包和支付。",
-    );
-    console.warn(
-      "         安装: npm install -g onchainos\n",
-    );
-  }
+  void (async () => {
+    const models = await getAdvertisedModels();
+    const freeModels = models
+      .filter((model) => model.tier === "free")
+      .map((model) => model.id)
+      .join(" / ");
+    const paidModels = models
+      .filter((model) => model.tier === "paid")
+      .map((model) => model.id)
+      .join(" / ");
+    const secScan = policy.security.scanPayments ? "✅ 开启" : "❌ 关闭";
+    const autoTopup = policy.autoTopup.enabled
+      ? `✅ 开启 (触发≤$${policy.autoTopup.triggerBelowUsd})`
+      : "❌ 关闭";
 
-  const secScan = policy.security.scanPayments ? "✅ 开启" : "❌ 关闭";
-  const autoTopup = policy.autoTopup.enabled ? `✅ 开启 (触发≤$${policy.autoTopup.triggerBelowUsd})` : "❌ 关闭";
+    if (!onchainos) {
+      console.warn(
+        "\n  [警告] onchainos CLI 未找到。付费模型需要 onchainos 支持钱包和支付。",
+      );
+      console.warn(
+        "         安装: npm install -g onchainos\n",
+      );
+    }
 
-  console.log(`
+    console.log(`
 ═══════════════════════════════════════════════════════
   OKXClawRouter v0.2.0  (Powered by OKX OnchainOS)
 ═══════════════════════════════════════════════════════
@@ -75,16 +88,15 @@ app.listen(config.port, () => {
   后端地址:   ${config.backendUrl}
   onchainos:  ${onchainos ? "✅ 已安装" : "❌ 未找到（仅免费模型可用）"}
   钱包状态:   ${wallet.loggedIn ? `✅ 已连接 (${wallet.address})` : "❌ 未连接"}
-
   安全扫描:   ${secScan}     自动补仓: ${autoTopup}
 
   免费模型（无需登录）:
-    DeepSeek V3 / DeepSeek R1 / Qwen3
+    ${freeModels || "(none advertised by backend)"}
 
 ${
   wallet.loggedIn
     ? `  付费模型已就绪:
-    Claude Sonnet 4.6 / GPT-5.4 / Gemini 3.1 Pro`
+    ${paidModels || "(none advertised by backend)"}`
     : `  解锁 Claude / GPT-5.4 / Gemini:
     1. /wallet login <邮箱>   登录 OKX Agentic Wallet
     2. 充值 USDC（X Layer 网络） → https://web3.okx.com/onchainos
@@ -95,7 +107,10 @@ ${
 ═══════════════════════════════════════════════════════
 `);
 
-  log.info(`OKXClawRouter proxy listening on :${config.port}`);
+    log.info(`OKXClawRouter proxy listening on :${config.port}`);
+  })().catch((err) => {
+    console.error("Failed to load advertised model list:", err);
+  });
 });
 
 export default app;

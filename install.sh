@@ -72,7 +72,7 @@ fi
 # onchainos (optional)
 if check_command onchainos; then
   ONCHAINOS_VER=$(onchainos --version 2>/dev/null || echo "?")
-  ok "onchainos v${ONCHAINOS_VER} ${PAID} 付费模型可用"
+  ok "${ONCHAINOS_VER} ${PAID} 付费模型可用"
   HAS_ONCHAINOS=true
 else
   warn "onchainos 未安装 — 仅免费模型可用"
@@ -168,21 +168,25 @@ if [ -f "$OPENCLAW_CONFIG" ]; then
       api: 'openai-completions',
       apiKey: 'sk-okxclawrouter',
       models: [
-        { id: 'free/deepseek-chat',     name: 'okxclawrouter 🆓 DeepSeek Chat',     api: 'openai-completions', reasoning: false, input: ['text'], cost: {input:0,output:0,cacheRead:0,cacheWrite:0}, contextWindow: 128000, maxTokens: 8192 },
-        { id: 'free/deepseek-r1',       name: 'okxclawrouter 🆓 DeepSeek R1',       api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0,output:0,cacheRead:0,cacheWrite:0}, contextWindow: 128000, maxTokens: 8192 },
-        { id: 'free/qwen3',             name: 'okxclawrouter 🆓 Qwen3',             api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0,output:0,cacheRead:0,cacheWrite:0}, contextWindow: 128000, maxTokens: 8192 },
-        { id: 'paid/claude-sonnet-4-6',  name: 'okxclawrouter 💰 Claude Sonnet 4.6', api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0.01,output:0.01,cacheRead:0,cacheWrite:0}, contextWindow: 200000, maxTokens: 64000 },
-        { id: 'paid/gpt-5.4',           name: 'okxclawrouter 💰 GPT-5.4',           api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0.01,output:0.01,cacheRead:0,cacheWrite:0}, contextWindow: 400000, maxTokens: 128000 },
-        { id: 'paid/gemini-3.1-pro',    name: 'okxclawrouter 💰 Gemini 3.1 Pro',    api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0.008,output:0.008,cacheRead:0,cacheWrite:0}, contextWindow: 1050000, maxTokens: 65536 }
+        { id: 'openrouter/free',          name: 'okxclawrouter 🆓 OpenRouter Free',    api: 'openai-completions', reasoning: false, input: ['text'], cost: {input:0,output:0,cacheRead:0,cacheWrite:0}, contextWindow: 128000,  maxTokens: 8192 },
+        { id: 'qwen/qwen3-coder:free',    name: 'okxclawrouter 🆓 Qwen3 Coder',        api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0,output:0,cacheRead:0,cacheWrite:0}, contextWindow: 128000,  maxTokens: 8192 },
+        { id: 'paid/claude-sonnet-4-6',   name: 'okxclawrouter 💰 Claude Sonnet 4.6',  api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0.01, output:0.01,  cacheRead:0, cacheWrite:0}, contextWindow: 200000,  maxTokens: 64000 },
+        { id: 'paid/gpt-5.4',             name: 'okxclawrouter 💰 GPT-5.4',            api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0.01, output:0.01,  cacheRead:0, cacheWrite:0}, contextWindow: 400000,  maxTokens: 128000 },
+        { id: 'paid/gemini-3.1-pro',      name: 'okxclawrouter 💰 Gemini 3.1 Pro',     api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0.008,output:0.008, cacheRead:0, cacheWrite:0}, contextWindow: 1050000, maxTokens: 65536 }
       ]
     };
-    // Register models in agents.defaults.models so OpenClaw shows them in the UI
     if (!cfg.agents) cfg.agents = {};
     if (!cfg.agents.defaults) cfg.agents.defaults = {};
     if (!cfg.agents.defaults.models) cfg.agents.defaults.models = {};
-    cfg.models.providers.okxclawrouter.models.forEach(function(m) {
-      cfg.agents.defaults.models['okxclawrouter/' + m.id] = {};
-    });
+
+    cfg.agents.defaults.models['okxclawrouter/openrouter/free'] = { alias: 'OKX Free' };
+    cfg.agents.defaults.models['okxclawrouter/qwen/qwen3-coder:free'] = { alias: 'OKX Qwen3 Coder' };
+    cfg.agents.defaults.models['okxclawrouter/paid/claude-sonnet-4-6'] = { alias: 'OKX Claude Sonnet 4.6' };
+    cfg.agents.defaults.models['okxclawrouter/paid/gpt-5.4'] = { alias: 'OKX GPT-5.4' };
+    cfg.agents.defaults.models['okxclawrouter/paid/gemini-3.1-pro'] = { alias: 'OKX Gemini 3.1 Pro' };
+
+    if (!cfg.meta) cfg.meta = {};
+    cfg.meta.lastTouchedAt = new Date().toISOString();
     fs.writeFileSync('$OPENCLAW_CONFIG', JSON.stringify(cfg, null, 2));
     console.log('OK');
   " 2>&1
@@ -229,7 +233,7 @@ DONE
 echo -e "${RESET}"
 
 echo -e "  ${BOLD}${FIRE} 免费模型 (即开即用):${RESET}"
-echo -e "    ${FREE} DeepSeek V3  /  DeepSeek R1  /  Qwen3"
+echo -e "    ${FREE} OpenRouter Free  /  Qwen3 Coder"
 echo ""
 echo -e "  ${BOLD}${STAR} 启动代理:${RESET}"
 echo -e "    ${W} okxclawrouter${RESET}"
@@ -250,8 +254,8 @@ fi
 
 echo ""
 echo -e "  ${BOLD}${BRAIN} OpenClaw 已自动配置，直接用:${RESET}"
-echo -e "    /model okxclawrouter/free/deepseek-chat     ${DIM}(免费)${RESET}"
-echo -e "    /model okxclawrouter/paid/claude-sonnet-4-6  ${DIM}(付费)${RESET}"
+echo -e "    /model okxclawrouter/openrouter/free           ${DIM}(免费)${RESET}"
+echo -e "    /model okxclawrouter/paid/claude-sonnet-4-6   ${DIM}(付费)${RESET}"
 echo ""
 echo -e "  ${BOLD}${LINK} Cursor / VS Code:${RESET}"
 echo -e "    API Base URL → ${BOLD}http://localhost:8402/v1${RESET}"

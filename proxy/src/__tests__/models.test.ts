@@ -7,8 +7,8 @@ import {
 } from "../models.js";
 
 describe("proxy models", () => {
-  it("should have 3 free models", () => {
-    expect(FREE_MODELS).toHaveLength(3);
+  it("should have 2 free models", () => {
+    expect(FREE_MODELS).toHaveLength(2);
   });
 
   it("should have 3 paid models", () => {
@@ -16,11 +16,11 @@ describe("proxy models", () => {
   });
 
   it("ALL_MODELS should be free + paid combined", () => {
-    expect(ALL_MODELS).toHaveLength(6);
+    expect(ALL_MODELS).toHaveLength(5);
   });
 
   it("should validate known models", () => {
-    expect(isValidModel("free/deepseek-chat")).toBe(true);
+    expect(isValidModel("openrouter/free")).toBe(true);
     expect(isValidModel("paid/claude-sonnet-4-6")).toBe(true);
   });
 

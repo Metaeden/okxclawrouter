@@ -3,8 +3,5 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     exclude: ["dist/**", "node_modules/**"],
-    env: {
-      OKX_ROUTER_BACKEND: "http://localhost:4002",
-    },
   },
 });
