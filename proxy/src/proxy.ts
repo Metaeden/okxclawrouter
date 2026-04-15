@@ -307,8 +307,12 @@ export async function handleChatCompletion(
               }
 
               balanceWarningEmitted = true;
+              const walletStatus = checkWalletStatus();
               const currentBalance = getXLayerUsdcBalance();
-              balanceWarningDetail = buildTopupWarning(currentBalance) as any;
+              balanceWarningDetail = buildTopupWarning(
+                currentBalance,
+                walletStatus.address,
+              ) as any;
               const remaining = modelsToTry.slice(i + 1);
               if (!remaining.some((m) => isFreeModel(m))) {
                 modelsToTry.push(...freeFallbackModels());
@@ -454,7 +458,11 @@ export async function handleChatCompletion(
             if (payErr instanceof InsufficientBalanceError) {
               log.warn("USDC 余额不足（流式），降级至免费模型");
               balanceWarningEmitted = true;
-              balanceWarningDetail = buildTopupWarning(getXLayerUsdcBalance()) as any;
+              const walletStatus = checkWalletStatus();
+              balanceWarningDetail = buildTopupWarning(
+                getXLayerUsdcBalance(),
+                walletStatus.address,
+              ) as any;
               const remaining = modelsToTry.slice(i + 1);
               if (!remaining.some((m) => isFreeModel(m))) {
                 modelsToTry.push(...freeFallbackModels());
@@ -519,7 +527,7 @@ export async function handleChatCompletion(
 
         // Inject balance warning as SSE comment
         if (balanceWarningEmitted) {
-          res.write(buildBalanceWarningSSE(model));
+          res.write(buildBalanceWarningSSE(model, checkWalletStatus().address));
         }
 
         // Start SSE heartbeat to prevent client timeout (ported from ClawRouter)
@@ -633,10 +641,15 @@ function sendCachedResponse(
   });
 }
 
-function buildBalanceWarningSSE(fallbackModel: string): string {
+function buildBalanceWarningSSE(
+  fallbackModel: string,
+  walletAddress?: string,
+): string {
   return [
     `: [OKX Router] USDC 余额不足 — 已切换至免费模型: ${fallbackModel}`,
-    `: [OKX Router] 充值地址: https://web3.okx.com/onchainos（X Layer 网络）`,
+    walletAddress
+      ? `: [OKX Router] 请向该地址充值 X-Layer USDC: ${walletAddress}`
+      : `: [OKX Router] 充值地址: https://web3.okx.com/onchainos（X Layer 网络）`,
     `: [OKX Router] 开启自动补仓: /policy autoTopup.enabled=true`,
     "",
   ].join("\n");

@@ -162,6 +162,7 @@ export async function executeAutoTopup(
  */
 export function buildTopupWarning(
   currentBalance: string | undefined,
+  walletAddress?: string,
   topupResult?: TopupResult,
 ): object {
   if (topupResult?.success) {
@@ -174,8 +175,15 @@ export function buildTopupWarning(
 
   return {
     type: "insufficient_balance",
-    message: `USDC 余额不足（当前: ${currentBalance ?? "未知"}），已切换至免费模型`,
-    action: "前往 https://web3.okx.com/onchainos 充值 USDC（X Layer 网络）",
+    message: walletAddress
+      ? `USDC 余额不足（当前: ${currentBalance ?? "未知"}）。请向下方地址充值 X-Layer USDC，充值后重试。`
+      : `USDC 余额不足（当前: ${currentBalance ?? "未知"}）。请充值 X-Layer USDC 后重试。`,
+    rechargeAddress: walletAddress,
+    network: "X Layer",
+    asset: "USDC",
+    action: walletAddress
+      ? `向该地址充值 USDC（X Layer）: ${walletAddress}`
+      : "前往 https://web3.okx.com/onchainos 充值 USDC（X Layer 网络）",
     topupHint: "设置 /policy topup.enabled=true 可开启自动换币补仓",
   };
 }
