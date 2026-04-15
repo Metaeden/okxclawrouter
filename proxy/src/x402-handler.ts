@@ -22,6 +22,14 @@ interface PaymentRequirement {
   resource?: unknown;
   accepted?: unknown;
   accepts?: unknown[];
+  error?: string;
+}
+
+interface PaymentAcceptance {
+  scheme?: string;
+  network?: string;
+  extra?: Record<string, unknown>;
+  [key: string]: unknown;
 }
 
 export class InsufficientBalanceError extends Error {
@@ -53,6 +61,60 @@ export class PaymentReplayRejectedError extends Error {
     );
     this.name = "PaymentReplayRejectedError";
   }
+}
+
+function buildAcceptedPayment(
+  accepted: unknown,
+  paymentResult: PaymentResult,
+): PaymentAcceptance {
+  const paymentAcceptance: PaymentAcceptance =
+    accepted && typeof accepted === "object"
+      ? { ...(accepted as PaymentAcceptance) }
+      : {};
+
+  if (paymentAcceptance.scheme === "aggr_deferred" && paymentResult.sessionCert) {
+    paymentAcceptance.extra = {
+      ...(paymentAcceptance.extra ?? {}),
+      sessionCert: paymentResult.sessionCert,
+    };
+  }
+
+  return paymentAcceptance;
+}
+
+function buildPaymentPayload(paymentResult: PaymentResult): Record<string, unknown> {
+  const { sessionCert: _sessionCert, ...payload } = paymentResult;
+  return payload;
+}
+
+async function getReplayErrorDetails(response: Response): Promise<string | undefined> {
+  const replayBody = await response
+    .clone()
+    .text()
+    .then((body) => body.trim())
+    .catch(() => "");
+
+  if (replayBody && replayBody !== "{}") {
+    return replayBody;
+  }
+
+  const paymentRequired = response.headers.get("PAYMENT-REQUIRED");
+  if (!paymentRequired) {
+    return replayBody || undefined;
+  }
+
+  try {
+    const decoded = JSON.parse(
+      Buffer.from(paymentRequired, "base64").toString(),
+    ) as PaymentRequirement;
+    if (decoded.error) {
+      return `error=${decoded.error}`;
+    }
+  } catch {
+    // Ignore malformed diagnostics and fall back to the plain response body.
+  }
+
+  return replayBody || undefined;
 }
 
 /**
@@ -166,13 +228,14 @@ export async function handleX402Payment(
 
   if (paymentRequired) {
     // v2 协议
+    const acceptedPayment = buildAcceptedPayment(accepts[0], paymentResult);
     headerName = "PAYMENT-SIGNATURE";
     headerValue = Buffer.from(
       JSON.stringify({
         x402Version: requirement?.x402Version ?? 2,
         resource: requirement?.resource ?? { url: originalUrl },
-        accepted: accepts[0],
-        payload: paymentResult,
+        accepted: acceptedPayment,
+        payload: buildPaymentPayload(paymentResult),
       }),
     ).toString("base64");
   } else {
@@ -203,11 +266,7 @@ export async function handleX402Payment(
     `付费请求重放完成: status=${replayResponse.status} elapsed=${Date.now() - paymentStart}ms`,
   );
   if (replayResponse.status === 402) {
-    const replayBody = await replayResponse
-      .clone()
-      .text()
-      .then((body) => body.trim())
-      .catch(() => "");
+    const replayBody = await getReplayErrorDetails(replayResponse);
     throw new PaymentReplayRejectedError(
       replayResponse.status,
       replayBody || undefined,

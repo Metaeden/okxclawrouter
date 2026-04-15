@@ -190,6 +190,65 @@ describe("handleX402Payment", () => {
     });
   });
 
+  it("moves aggr_deferred sessionCert into accepted.extra", async () => {
+    const accepted = {
+      scheme: "aggr_deferred",
+      network: "eip155:196",
+      payTo: "0xto",
+      amount: "10000",
+      extra: {
+        name: "USDC",
+        version: "2",
+      },
+    };
+    execFileSyncMock.mockReturnValue(
+      JSON.stringify({
+        ok: true,
+        data: {
+          signature: "sig",
+          authorization: { from: "0xfrom", to: "0xto", value: "10000" },
+          sessionCert: "session-cert-123",
+        },
+      }),
+    );
+    fetchMock.mockResolvedValueOnce(new Response("ok", { status: 200 }));
+
+    const response = new Response(null, {
+      status: 402,
+      headers: {
+        "PAYMENT-REQUIRED": encodeBase64Json({
+          x402Version: 2,
+          resource: { url: "https://paid.example/v1/chat" },
+          accepted,
+        }),
+      },
+    });
+
+    await handleX402Payment(
+      response,
+      "https://paid.example/v1/chat",
+      { "content-type": "application/json" },
+      '{"prompt":"hello"}',
+    );
+
+    const [, replayInit] = fetchMock.mock.calls[0];
+    const paymentHeader = (replayInit?.headers as Record<string, string>)["PAYMENT-SIGNATURE"];
+    const decoded = JSON.parse(Buffer.from(paymentHeader, "base64").toString());
+
+    expect(decoded.accepted).toEqual({
+      ...accepted,
+      extra: {
+        name: "USDC",
+        version: "2",
+        sessionCert: "session-cert-123",
+      },
+    });
+    expect(decoded.payload).toEqual({
+      signature: "sig",
+      authorization: { from: "0xfrom", to: "0xto", value: "10000" },
+    });
+  });
+
   it("replays v1 payments with X-PAYMENT", async () => {
     loadPolicyMock.mockReturnValue({
       security: {
@@ -319,7 +378,15 @@ describe("handleX402Payment", () => {
         allowWarnLevel: true,
       },
     });
-    fetchMock.mockResolvedValueOnce(new Response("still blocked", { status: 402 }));
+    fetchMock.mockResolvedValueOnce(new Response("{}", {
+      status: 402,
+      headers: {
+        "PAYMENT-REQUIRED": encodeBase64Json({
+          error: "invalid_session_cert",
+          accepted: { network: "base", payTo: "0xto", maxAmountRequired: "0.01" },
+        }),
+      },
+    }));
 
     const response = new Response(null, {
       status: 402,
@@ -336,7 +403,7 @@ describe("handleX402Payment", () => {
       expect.objectContaining<Partial<PaymentReplayRejectedError>>({
         name: "PaymentReplayRejectedError",
         status: 402,
-        responseBody: "still blocked",
+        responseBody: "error=invalid_session_cert",
       }),
     );
   });
