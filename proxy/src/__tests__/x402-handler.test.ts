@@ -371,6 +371,40 @@ describe("handleX402Payment", () => {
     }));
   });
 
+  it("maps replay insufficient_balance failures to InsufficientBalanceError", async () => {
+    loadPolicyMock.mockReturnValue({
+      security: {
+        scanPayments: false,
+        allowWarnLevel: true,
+      },
+    });
+    fetchMock.mockResolvedValueOnce(new Response("{}", {
+      status: 402,
+      headers: {
+        "PAYMENT-REQUIRED": encodeBase64Json({
+          error: "insufficient_balance",
+          accepted: { network: "base", payTo: "0xto", maxAmountRequired: "1.23" },
+        }),
+      },
+    }));
+
+    const response = new Response(null, {
+      status: 402,
+      headers: {
+        "PAYMENT-REQUIRED": encodeBase64Json({
+          accepted: { network: "base", payTo: "0xto", maxAmountRequired: "1.23" },
+        }),
+      },
+    });
+
+    await expect(
+      handleX402Payment(response, "https://paid.example/v1/chat", {}, "{}"),
+    ).rejects.toEqual(expect.objectContaining<Partial<InsufficientBalanceError>>({
+      name: "InsufficientBalanceError",
+      required: "1.23",
+    }));
+  });
+
   it("throws when replay still returns 402", async () => {
     loadPolicyMock.mockReturnValue({
       security: {

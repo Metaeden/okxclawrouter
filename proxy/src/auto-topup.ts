@@ -182,8 +182,8 @@ export function buildTopupWarning(
     network: "X Layer",
     asset: "USDC",
     action: walletAddress
-      ? `向该地址充值 USDC（X Layer）: ${walletAddress}`
-      : "前往 https://web3.okx.com/onchainos 充值 USDC（X Layer 网络）",
+      ? `请通过 OKX Wallet 或 OKX App 向该地址充值 USDC（X Layer）: ${walletAddress}`
+      : "请通过 OKX Wallet 或 OKX App 充值 X Layer USDC",
     topupHint: "设置 /policy topup.enabled=true 可开启自动换币补仓",
   };
 }

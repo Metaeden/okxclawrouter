@@ -267,6 +267,14 @@ export async function handleX402Payment(
   );
   if (replayResponse.status === 402) {
     const replayBody = await getReplayErrorDetails(replayResponse);
+    if (
+      replayBody?.includes("insufficient_balance") ||
+      replayBody?.includes("insufficient balance") ||
+      replayBody?.includes("余额不足")
+    ) {
+      const price = (accepts[0] as any)?.price ?? (accepts[0] as any)?.maxAmountRequired;
+      throw new InsufficientBalanceError(price);
+    }
     throw new PaymentReplayRejectedError(
       replayResponse.status,
       replayBody || undefined,

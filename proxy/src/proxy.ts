@@ -685,8 +685,8 @@ function buildInsufficientBalanceText(
   const lines = [
     detail.message || "X Layer USDC 余额不足，当前无法使用付费模型。",
     detail.rechargeAddress
-      ? `充值地址: ${detail.rechargeAddress}`
-      : "充值入口: https://web3.okx.com/onchainos",
+      ? `请通过 OKX Wallet 或 OKX App 向该地址充值: ${detail.rechargeAddress}`
+      : "请通过 OKX Wallet 或 OKX App 充值 X Layer USDC",
     `网络: ${detail.network || "X Layer"}`,
     `资产: ${detail.asset || "USDC"}`,
     "充值后请重试。",
@@ -836,8 +836,8 @@ function buildBalanceWarningSSE(
   return [
     `: [OKX Router] USDC 余额不足 — 已切换至免费模型: ${fallbackModel}`,
     walletAddress
-      ? `: [OKX Router] 请向该地址充值 X-Layer USDC: ${walletAddress}`
-      : `: [OKX Router] 充值地址: https://web3.okx.com/onchainos（X Layer 网络）`,
+      ? `: [OKX Router] 请通过 OKX Wallet 或 OKX App 向该地址充值 X Layer USDC: ${walletAddress}`
+      : `: [OKX Router] 请通过 OKX Wallet 或 OKX App 充值 X Layer USDC`,
     `: [OKX Router] 开启自动补仓: /policy autoTopup.enabled=true`,
     "",
   ].join("\n");
