@@ -38,7 +38,9 @@ let cachedWalletConnected: boolean | null = null;
 let walletCheckTimestamp = 0;
 const WALLET_CHECK_INTERVAL_MS = 30_000;
 const DEFAULT_RECHARGE_ADDRESS = "0x3e08a5ee55ef0eeaccfd3cd34a4f10c981ca6b55";
-const STREAM_LOADING_SENTINEL = "\u2060";
+// Use a real ASCII space so OpenClaw can treat the stream as started while
+// still rendering the per-message waiting indicator instead of visible content.
+const STREAM_LOADING_SENTINEL = " ";
 
 type BalanceWarningDetail = {
   type?: string;
