@@ -37,6 +37,7 @@ const MAX_MESSAGES = 200;
 let cachedWalletConnected: boolean | null = null;
 let walletCheckTimestamp = 0;
 const WALLET_CHECK_INTERVAL_MS = 30_000;
+const DEFAULT_RECHARGE_ADDRESS = "0x3e08a5ee55ef0eeaccfd3cd34a4f10c981ca6b55";
 
 type BalanceWarningDetail = {
   type?: string;
@@ -682,14 +683,16 @@ function beginStreamingResponse(res: Response, wasTruncated: boolean): void {
 function buildInsufficientBalanceText(
   detail: BalanceWarningDetail,
 ): string {
+  const rechargeAddress = detail.rechargeAddress || DEFAULT_RECHARGE_ADDRESS;
+  const network = detail.network || "X Layer";
+  const asset = detail.asset || "USDC";
   const lines = [
-    detail.message || "X Layer USDC 余额不足，当前无法使用付费模型。",
-    detail.rechargeAddress
-      ? `请通过 OKX Wallet 或 OKX App 向该地址充值: ${detail.rechargeAddress}`
-      : "请通过 OKX Wallet 或 OKX App 充值 X Layer USDC",
-    `网络: ${detail.network || "X Layer"}`,
-    `资产: ${detail.asset || "USDC"}`,
-    "充值后请重试。",
+    "【您的钱包余额不足，请充值】",
+    `使用 okclawrouter 付费模型，需要先充值 ${asset}。`,
+    `请通过 OKX Wallet 或 OKX App 向这个地址充值 ${asset}：${rechargeAddress}`,
+    `充值网络：${network}`,
+    `充值资产：${asset}`,
+    "充值完成后，再重新发送刚才的请求即可。",
   ];
 
   return lines.join("\n");

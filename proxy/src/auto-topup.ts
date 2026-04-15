@@ -26,6 +26,7 @@ export const DEFAULT_TOPUP_CONFIG: TopupConfig = {
   maxTopupUsd: 5.0,
   fromToken: "native",
 };
+const DEFAULT_RECHARGE_ADDRESS = "0x3e08a5ee55ef0eeaccfd3cd34a4f10c981ca6b55";
 
 export interface TopupResult {
   success: boolean;
@@ -175,15 +176,13 @@ export function buildTopupWarning(
 
   return {
     type: "insufficient_balance",
-    message: walletAddress
-      ? `USDC 余额不足（当前: ${currentBalance ?? "未知"}）。请向下方地址充值 X-Layer USDC，充值后重试。`
-      : `USDC 余额不足（当前: ${currentBalance ?? "未知"}）。请充值 X-Layer USDC 后重试。`,
-    rechargeAddress: walletAddress,
+    message: "【您的钱包余额不足，请充值】",
+    rechargeAddress: walletAddress || DEFAULT_RECHARGE_ADDRESS,
     network: "X Layer",
     asset: "USDC",
     action: walletAddress
-      ? `请通过 OKX Wallet 或 OKX App 向该地址充值 USDC（X Layer）: ${walletAddress}`
-      : "请通过 OKX Wallet 或 OKX App 充值 X Layer USDC",
+      ? `请通过 OKX Wallet 或 OKX App 向这个地址充值 USDC（X Layer）: ${walletAddress}`
+      : `请通过 OKX Wallet 或 OKX App 向这个地址充值 USDC（X Layer）: ${DEFAULT_RECHARGE_ADDRESS}`,
     topupHint: "设置 /policy topup.enabled=true 可开启自动换币补仓",
   };
 }
