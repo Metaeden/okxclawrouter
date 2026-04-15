@@ -1,5 +1,6 @@
 import { execFileSync } from "child_process";
 import { log } from "./logger.js";
+import { getOnchainosBin } from "./onchainos-bin.js";
 
 export type ScanAction = "safe" | "warn" | "block";
 
@@ -35,7 +36,7 @@ export function scanPaymentTransaction(target: PaymentTarget): ScanResult {
 
     log.debug(`安全扫描: onchainos ${args.join(" ")}`);
 
-    const output = execFileSync("onchainos", args, {
+    const output = execFileSync(getOnchainosBin(), args, {
       encoding: "utf-8",
       stdio: "pipe",
       timeout: 10_000,

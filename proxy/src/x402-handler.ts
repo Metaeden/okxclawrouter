@@ -3,6 +3,7 @@ import { log } from "./logger.js";
 import { scanPaymentTransaction, extractPaymentTarget } from "./security-scanner.js";
 import { loadPolicy } from "./policy.js";
 import { checkWalletStatus } from "./onchainos-wallet.js";
+import { getOnchainosBin } from "./onchainos-bin.js";
 
 interface PaymentResult {
   signature: string;
@@ -97,7 +98,7 @@ export async function handleX402Payment(
   let paymentResult: PaymentResult;
   try {
     const output = execFileSync(
-      "onchainos",
+      getOnchainosBin(),
       ["payment", "x402-pay", "--accepts", acceptsJson],
       { encoding: "utf-8", stdio: "pipe" },
     );

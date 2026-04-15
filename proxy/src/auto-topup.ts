@@ -1,5 +1,6 @@
 import { execFileSync } from "child_process";
 import { log } from "./logger.js";
+import { getOnchainosBin } from "./onchainos-bin.js";
 
 // X-Layer 上 USDC 合约地址
 const XLAYER_USDC = "0x74b7f16337b8972027f6196a17a631ac6de26d22";
@@ -53,7 +54,7 @@ export function getTopupQuote(
     ];
 
     log.debug(`查询换币报价: onchainos ${args.join(" ")}`);
-    const output = execFileSync("onchainos", args, {
+    const output = execFileSync(getOnchainosBin(), args, {
       encoding: "utf-8",
       stdio: "pipe",
       timeout: 15_000,
@@ -107,7 +108,7 @@ export async function executeAutoTopup(
     ];
 
     log.info(`自动补仓: onchainos ${swapArgs.join(" ")}`);
-    const swapOutput = execFileSync("onchainos", swapArgs, {
+    const swapOutput = execFileSync(getOnchainosBin(), swapArgs, {
       encoding: "utf-8",
       stdio: "pipe",
       timeout: 30_000,
@@ -130,7 +131,7 @@ export async function executeAutoTopup(
     ];
 
     log.info(`广播补仓交易: onchainos ${broadcastArgs.join(" ")}`);
-    const broadcastOutput = execFileSync("onchainos", broadcastArgs, {
+    const broadcastOutput = execFileSync(getOnchainosBin(), broadcastArgs, {
       encoding: "utf-8",
       stdio: "pipe",
       timeout: 60_000,

@@ -135,6 +135,7 @@ echo ""
 
 LAUNCH_SCRIPT="${HOME}/.local/bin/okclawrouter"
 NODE_BIN="$(command -v node)"
+ONCHAINOS_BIN="$(command -v onchainos || true)"
 mkdir -p "$(dirname "$LAUNCH_SCRIPT")"
 
 cat > "$LAUNCH_SCRIPT" << 'LAUNCHER'
@@ -157,6 +158,7 @@ PID_FILE="${INSTALL_ROOT}/okclawrouter.pid"
 LOG_FILE="${INSTALL_ROOT}/okclawrouter.log"
 LAUNCHCTL_LABEL="com.metaeden.okclawrouter"
 NODE_BIN="__NODE_BIN__"
+ONCHAINOS_BIN="__ONCHAINOS_BIN__"
 export OKCLAWROUTER_BACKEND="${OKCLAWROUTER_BACKEND:-${OKX_ROUTER_BACKEND:-http://130.162.140.123:4002}}"
 export OKCLAWROUTER_PORT="${OKCLAWROUTER_PORT:-${OKX_ROUTER_PORT:-8402}}"
 
@@ -167,6 +169,10 @@ fi
 if [ -z "$NODE_BIN" ]; then
   echo "Node.js binary not found. Re-run install.sh to refresh the launcher." >&2
   exit 1
+fi
+
+if [ -n "$ONCHAINOS_BIN" ] && [ ! -x "$ONCHAINOS_BIN" ]; then
+  ONCHAINOS_BIN="$(command -v onchainos 2>/dev/null || true)"
 fi
 
 is_launchctl_mode() {
@@ -234,6 +240,7 @@ start_bg() {
       /usr/bin/env \
       OKCLAWROUTER_BACKEND="$OKCLAWROUTER_BACKEND" \
       OKCLAWROUTER_PORT="$OKCLAWROUTER_PORT" \
+      ONCHAINOS_BIN="$ONCHAINOS_BIN" \
       "$NODE_BIN" "$INSTALL_DIR/dist/index.js"
     sleep 0.2
     get_launchctl_pid > "$PID_FILE" 2>/dev/null || true
@@ -345,12 +352,17 @@ case "$cmd" in
 esac
 LAUNCHER
 
-python3 - "$LAUNCH_SCRIPT" "$NODE_BIN" <<'PY'
+python3 - "$LAUNCH_SCRIPT" "$NODE_BIN" "$ONCHAINOS_BIN" <<'PY'
 from pathlib import Path
 import sys
 path = Path(sys.argv[1])
 node_bin = sys.argv[2]
-path.write_text(path.read_text().replace('__NODE_BIN__', node_bin))
+onchainos_bin = sys.argv[3]
+path.write_text(
+    path.read_text()
+    .replace('__NODE_BIN__', node_bin)
+    .replace('__ONCHAINOS_BIN__', onchainos_bin)
+)
 PY
 
 chmod +x "$LAUNCH_SCRIPT"

@@ -1,5 +1,6 @@
 import { execSync, execFileSync } from "child_process";
 import { log } from "./logger.js";
+import { getOnchainosBin } from "./onchainos-bin.js";
 
 export interface WalletStatus {
   loggedIn: boolean;
@@ -36,7 +37,7 @@ const CHAIN_NAMES: Record<string, string> = {
 
 export function isOnchainosInstalled(): boolean {
   try {
-    execSync("onchainos --version", { encoding: "utf-8", stdio: "pipe" });
+    execFileSync(getOnchainosBin(), ["--version"], { encoding: "utf-8", stdio: "pipe" });
     return true;
   } catch {
     return false;
@@ -45,9 +46,10 @@ export function isOnchainosInstalled(): boolean {
 
 export function checkWalletStatus(): WalletStatus {
   try {
+    const onchainosBin = getOnchainosBin();
     const [statusOut, addrsOut] = [
-      execSync("onchainos wallet status", { encoding: "utf-8", stdio: "pipe" }),
-      execSync("onchainos wallet addresses", { encoding: "utf-8", stdio: "pipe" }),
+      execFileSync(onchainosBin, ["wallet", "status"], { encoding: "utf-8", stdio: "pipe" }),
+      execFileSync(onchainosBin, ["wallet", "addresses"], { encoding: "utf-8", stdio: "pipe" }),
     ];
     const status = JSON.parse(statusOut);
     const addrs = JSON.parse(addrsOut);
@@ -71,7 +73,7 @@ export function checkWalletStatus(): WalletStatus {
  */
 export function getXLayerUsdcBalance(): string | undefined {
   try {
-    const output = execSync("onchainos wallet balance", {
+    const output = execFileSync(getOnchainosBin(), ["wallet", "balance"], {
       encoding: "utf-8",
       stdio: "pipe",
     });
@@ -90,7 +92,7 @@ export function getXLayerUsdcBalance(): string | undefined {
  */
 export function getWalletPortfolio(): WalletPortfolio {
   try {
-    const output = execSync("onchainos wallet balance", {
+    const output = execFileSync(getOnchainosBin(), ["wallet", "balance"], {
       encoding: "utf-8",
       stdio: "pipe",
       timeout: 15_000,
@@ -157,9 +159,9 @@ export function formatPortfolio(portfolio: WalletPortfolio): string {
 }
 
 export function walletLogin(email: string): void {
-  execFileSync("onchainos", ["wallet", "login", email], { stdio: "inherit" });
+  execFileSync(getOnchainosBin(), ["wallet", "login", email], { stdio: "inherit" });
 }
 
 export function walletLogout(): void {
-  execSync("onchainos wallet logout", { stdio: "inherit" });
+  execFileSync(getOnchainosBin(), ["wallet", "logout"], { stdio: "inherit" });
 }
