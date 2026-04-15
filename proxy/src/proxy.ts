@@ -38,6 +38,16 @@ let cachedWalletConnected: boolean | null = null;
 let walletCheckTimestamp = 0;
 const WALLET_CHECK_INTERVAL_MS = 30_000;
 
+type BalanceWarningDetail = {
+  type?: string;
+  message?: string;
+  rechargeAddress?: string;
+  network?: string;
+  asset?: string;
+  action?: string;
+  topupHint?: string;
+};
+
 function isWalletConnected(): boolean {
   const now = Date.now();
   if (
@@ -313,11 +323,13 @@ export async function handleChatCompletion(
                 currentBalance,
                 walletStatus.address,
               ) as any;
-              const remaining = modelsToTry.slice(i + 1);
-              if (!remaining.some((m) => isFreeModel(m))) {
-                modelsToTry.push(...freeFallbackModels());
-              }
-              continue;
+              sendInsufficientBalanceResponse(
+                res,
+                model,
+                balanceWarningDetail as BalanceWarningDetail,
+                wasTruncated,
+              );
+              return;
             }
 
             if (payErr instanceof PaymentBlockedByScanError) {
@@ -478,18 +490,20 @@ export async function handleChatCompletion(
               paymentHeartbeat = undefined;
             }
             if (payErr instanceof InsufficientBalanceError) {
-              log.warn("USDC 余额不足（流式），降级至免费模型");
+              log.warn("USDC 余额不足（流式），直接返回充值提示");
               balanceWarningEmitted = true;
               const walletStatus = checkWalletStatus();
               balanceWarningDetail = buildTopupWarning(
                 getXLayerUsdcBalance(),
                 walletStatus.address,
               ) as any;
-              const remaining = modelsToTry.slice(i + 1);
-              if (!remaining.some((m) => isFreeModel(m))) {
-                modelsToTry.push(...freeFallbackModels());
-              }
-              continue;
+              sendInsufficientBalanceResponse(
+                res,
+                model,
+                balanceWarningDetail as BalanceWarningDetail,
+                wasTruncated,
+              );
+              return;
             }
             if (payErr instanceof PaymentBlockedByScanError) {
               log.error(`支付被安全扫描拦截（流式）: ${payErr.reason}`);
@@ -663,6 +677,105 @@ function beginStreamingResponse(res: Response, wasTruncated: boolean): void {
     res.setHeader("X-Router-Truncated", "true");
   }
   res.flushHeaders?.();
+}
+
+function buildInsufficientBalanceText(
+  detail: BalanceWarningDetail,
+): string {
+  const lines = [
+    detail.message || "X Layer USDC 余额不足，当前无法使用付费模型。",
+    detail.rechargeAddress
+      ? `充值地址: ${detail.rechargeAddress}`
+      : "充值入口: https://web3.okx.com/onchainos",
+    `网络: ${detail.network || "X Layer"}`,
+    `资产: ${detail.asset || "USDC"}`,
+    "充值后请重试。",
+  ];
+
+  return lines.join("\n");
+}
+
+function sendInsufficientBalanceResponse(
+  res: Response,
+  model: string,
+  detail: BalanceWarningDetail,
+  wasTruncated: boolean,
+): void {
+  if (res.headersSent) {
+    sendInsufficientBalanceStream(res, model, detail);
+    return;
+  }
+
+  if (wasTruncated) {
+    res.setHeader("X-Router-Truncated", "true");
+  }
+  res.setHeader("X-Router-Warning", "insufficient_balance");
+  res.status(200).json({
+    id: `chatcmpl-insufficient-balance-${Date.now()}`,
+    object: "chat.completion",
+    created: Math.floor(Date.now() / 1_000),
+    model,
+    choices: [
+      {
+        index: 0,
+        message: {
+          role: "assistant",
+          content: buildInsufficientBalanceText(detail),
+        },
+        finish_reason: "stop",
+      },
+    ],
+    x_router_warning: detail,
+  });
+}
+
+function sendInsufficientBalanceStream(
+  res: Response,
+  model: string,
+  detail: BalanceWarningDetail,
+): void {
+  beginStreamingResponse(res, false);
+  if (!res.headersSent) {
+    res.setHeader("X-Router-Warning", "insufficient_balance");
+  }
+  const content = buildInsufficientBalanceText(detail);
+  const created = Math.floor(Date.now() / 1_000);
+  res.write(
+    `data: ${JSON.stringify({
+      id: `chatcmpl-insufficient-balance-${Date.now()}`,
+      object: "chat.completion.chunk",
+      created,
+      model,
+      choices: [
+        {
+          index: 0,
+          delta: {
+            role: "assistant",
+            content,
+          },
+          finish_reason: null,
+        },
+      ],
+      x_router_warning: detail,
+    })}\n\n`,
+  );
+  res.write(
+    `data: ${JSON.stringify({
+      id: `chatcmpl-insufficient-balance-${Date.now()}`,
+      object: "chat.completion.chunk",
+      created,
+      model,
+      choices: [
+        {
+          index: 0,
+          delta: {},
+          finish_reason: "stop",
+        },
+      ],
+    })}\n\n`,
+  );
+  res.write("data: [DONE]\n\n");
+  res.end();
 }
 
 function buildRouterStatusChunk(
