@@ -11,6 +11,13 @@ interface PaymentResult {
   sessionCert?: string;
 }
 
+interface PaymentRequirement {
+  x402Version?: number;
+  resource?: unknown;
+  accepted?: unknown;
+  accepts?: unknown[];
+}
+
 export class InsufficientBalanceError extends Error {
   constructor(
     public readonly required?: string,
@@ -25,6 +32,13 @@ export class PaymentBlockedByScanError extends Error {
   constructor(public readonly reason: string) {
     super(`支付被安全扫描拦截: ${reason}`);
     this.name = "PaymentBlockedByScanError";
+  }
+}
+
+export class PaymentReplayRejectedError extends Error {
+  constructor(public readonly status: number) {
+    super(`支付已签名，但后端未接受支付凭证（重放后仍返回 ${status}）`);
+    this.name = "PaymentReplayRejectedError";
   }
 }
 
@@ -43,19 +57,23 @@ export async function handleX402Payment(
   originalBody: string,
 ): Promise<Response> {
   const policy = loadPolicy();
+  const paymentStart = Date.now();
 
   // Step 1: 解析 402 payload（支持 v2 header 和 v1 body 两种协议）
   let accepts: unknown[];
+  let requirement: PaymentRequirement | undefined;
 
   const paymentRequired = response.headers.get("PAYMENT-REQUIRED");
   if (paymentRequired) {
-    const decoded = JSON.parse(
+    requirement = JSON.parse(
       Buffer.from(paymentRequired, "base64").toString(),
-    );
-    accepts = decoded.accepted ? [decoded.accepted] : decoded.accepts;
+    ) as PaymentRequirement;
+    accepts = requirement.accepted
+      ? [requirement.accepted]
+      : (requirement.accepts ?? []);
   } else {
-    const body = await response.json();
-    accepts = body.accepts;
+    requirement = (await response.json()) as PaymentRequirement;
+    accepts = requirement.accepts ?? [];
   }
 
   // Step 2: 支付前安全扫描（如 policy 开启）
@@ -94,15 +112,17 @@ export async function handleX402Payment(
   // Step 3: 通过 onchainos 签名
   const acceptsJson = JSON.stringify(accepts);
   log.debug("x402 支付请求:", acceptsJson);
+  log.info("开始 x402 签名");
 
   let paymentResult: PaymentResult;
   try {
     const output = execFileSync(
       getOnchainosBin(),
       ["payment", "x402-pay", "--accepts", acceptsJson],
-      { encoding: "utf-8", stdio: "pipe" },
+      { encoding: "utf-8", stdio: "pipe", timeout: 15_000 },
     );
     paymentResult = JSON.parse(output);
+    log.info(`x402 签名完成 (${Date.now() - paymentStart}ms)`);
   } catch (err: any) {
     const stderr = err?.stderr?.toString() || err?.message || "";
     log.error("x402 签名失败:", stderr);
@@ -129,8 +149,8 @@ export async function handleX402Payment(
     headerName = "PAYMENT-SIGNATURE";
     headerValue = Buffer.from(
       JSON.stringify({
-        x402Version: 2,
-        resource: originalUrl,
+        x402Version: requirement?.x402Version ?? 2,
+        resource: requirement?.resource ?? { url: originalUrl },
         accepted: accepts[0],
         payload: paymentResult,
       }),
@@ -149,7 +169,8 @@ export async function handleX402Payment(
   }
 
   // Step 5: 带支付凭证重试原始请求（120s 超时）
-  return fetch(originalUrl, {
+  log.info("开始重放付费请求");
+  const replayResponse = await fetch(originalUrl, {
     method: "POST",
     headers: {
       ...originalHeaders,
@@ -158,4 +179,11 @@ export async function handleX402Payment(
     body: originalBody,
     signal: AbortSignal.timeout(120_000),
   });
+  log.info(
+    `付费请求重放完成: status=${replayResponse.status} elapsed=${Date.now() - paymentStart}ms`,
+  );
+  if (replayResponse.status === 402) {
+    throw new PaymentReplayRejectedError(replayResponse.status);
+  }
+  return replayResponse;
 }

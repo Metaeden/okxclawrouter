@@ -72,10 +72,10 @@ app.listen(config.port, () => {
 
     if (!onchainos) {
       console.warn(
-        "\n  [警告] onchainos CLI 未找到。付费模型需要 onchainos 支持钱包和支付。",
+        "\n  [警告] 当前客户端机器未找到 onchainos。免费模型仍可直接使用；付费模型需要本机钱包和支付能力。",
       );
       console.warn(
-        "         安装: npm install -g onchainos\n",
+        "         提示: 只需在运行本地 proxy 的机器安装，云端 backend 无需安装。\n",
       );
     }
 

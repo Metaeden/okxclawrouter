@@ -65,10 +65,12 @@ API Base URL → http://localhost:8402/v1
 
 ## 💰 解锁付费模型
 
-1. 安装 onchainos: `npm install -g onchainos`
+1. 在运行 `proxy` 的本机安装 OKX Onchain OS / Agentic Wallet 环境
 2. 登录: `/wallet login <你的邮箱>`
 3. 充值: 发送 USDC 到 X-Layer 钱包 → https://web3.okx.com/onchainos
 4. 使用: 连接钱包后付费模型自动生效
+
+> `onchainos` 只需要安装在运行本地 `proxy` 的机器上，不需要安装在云端 `backend` 服务器上。
 
 > 约 $1 USDC ≈ 100 次 Claude Sonnet 请求
 
@@ -95,6 +97,11 @@ AI Agent (Cursor/VS Code) → Local Proxy (:8402) → Backend (:4002) → OpenRo
 两个部署单元：
 - `proxy/` — 本地代理 (用户机器, localhost:8402)
 - `backend/` — 云端服务 + x402 支付网关 (port 4002)
+
+部署边界：
+- 云服务器只部署 `backend/`
+- 用户本机运行 `proxy/`
+- `onchainos` 只装在运行 `proxy/` 的机器上
 
 ## 🛠️ 开发
 

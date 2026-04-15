@@ -47,9 +47,9 @@ function handleWallet(sub: string | undefined, arg?: string): string {
   if (sub === "login") {
     if (!isOnchainosInstalled()) {
       return [
-        "onchainos is not installed.",
-        "Install it first: npm install -g onchainos",
-        "Then run: /wallet login",
+        "onchainos is not installed on this client machine.",
+        "Free models still work without it.",
+        "Install the OKX Onchain OS / Agentic Wallet environment locally, then run: /wallet login",
       ].join("\n");
     }
     if (!arg) {

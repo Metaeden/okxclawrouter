@@ -2,6 +2,20 @@ import { execFileSync } from "child_process";
 import { log } from "./logger.js";
 import { getOnchainosBin } from "./onchainos-bin.js";
 
+const EVM_CHAINS = new Set([
+  "xlayer",
+  "ethereum",
+  "base",
+  "bsc",
+  "polygon",
+  "arbitrum",
+  "optimism",
+  "linea",
+  "scroll",
+  "zksync",
+  "avalanche",
+]);
+
 export type ScanAction = "safe" | "warn" | "block";
 
 export interface ScanResult {
@@ -33,6 +47,12 @@ export function scanPaymentTransaction(target: PaymentTarget): ScanResult {
       "--from", from,
       "--to", to,
     ];
+
+    // x402 payments on EVM are offchain authorizations, not raw calldata-bearing txs.
+    // tx-scan still requires a data field, so send an empty payload to enable recipient risk checks.
+    if (EVM_CHAINS.has(chain)) {
+      args.push("--data", "0x");
+    }
 
     log.debug(`安全扫描: onchainos ${args.join(" ")}`);
 

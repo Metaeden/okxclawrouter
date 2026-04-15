@@ -3,7 +3,12 @@ import config from "./config.js";
 import { filterSupportedModels } from "./backend-models.js";
 import { route } from "./router/simple-router.js";
 import { checkWalletStatus, getXLayerUsdcBalance } from "./onchainos-wallet.js";
-import { handleX402Payment, InsufficientBalanceError, PaymentBlockedByScanError } from "./x402-handler.js";
+import {
+  handleX402Payment,
+  InsufficientBalanceError,
+  PaymentBlockedByScanError,
+  PaymentReplayRejectedError,
+} from "./x402-handler.js";
 import { fetchWithRetry } from "./retry.js";
 import { RequestDeduplicator, type CachedResponse } from "./dedup.js";
 import { ResponseCache } from "./response-cache.js";
@@ -322,6 +327,16 @@ export async function handleChatCompletion(
               return;
             }
 
+            if (payErr instanceof PaymentReplayRejectedError) {
+              log.error(`支付重放失败: ${payErr.message}`);
+              deduplicator.removeInflight(dedupKey);
+              res.status(402).json({
+                error: "payment_rejected_after_signing",
+                message: payErr.message,
+              });
+              return;
+            }
+
             log.warn("支付失败，尝试降级:", payErr);
             continue;
           }
@@ -451,6 +466,16 @@ export async function handleChatCompletion(
               if (!res.headersSent) {
                 res.status(403).json({
                   error: "payment_blocked_by_security_scan",
+                  message: payErr.message,
+                });
+              }
+              return;
+            }
+            if (payErr instanceof PaymentReplayRejectedError) {
+              log.error(`支付重放失败（流式）: ${payErr.message}`);
+              if (!res.headersSent) {
+                res.status(402).json({
+                  error: "payment_rejected_after_signing",
                   message: payErr.message,
                 });
               }

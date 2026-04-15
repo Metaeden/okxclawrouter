@@ -77,7 +77,7 @@ if check_command onchainos; then
   HAS_ONCHAINOS=true
 else
   warn "onchainos 未安装 — 仅免费模型可用"
-  echo -e "    ${DIM}付费模型需要: npm install -g onchainos${RESET}"
+  echo -e "    ${DIM}如需付费模型，请在当前这台客户端机器安装 OKX Onchain OS / Agentic Wallet 环境${RESET}"
   HAS_ONCHAINOS=false
 fi
 
@@ -113,8 +113,8 @@ fi
 
 cd "$INSTALL_DIR/proxy"
 
-echo -e "    ${DIM}安装依赖 (npm install)...${RESET}"
-npm install --silent 2>&1 | tail -3
+echo -e "    ${DIM}安装依赖 (npm ci)...${RESET}"
+npm ci --silent 2>&1 | tail -3
 
 echo -e "    ${DIM}构建 TypeScript (tsc)...${RESET}"
 npm run build --silent 2>&1
@@ -245,10 +245,12 @@ start_bg() {
     sleep 0.2
     get_launchctl_pid > "$PID_FILE" 2>/dev/null || true
   elif command -v setsid >/dev/null 2>&1; then
-    setsid "$NODE_BIN" "$INSTALL_DIR/dist/index.js" >>"$LOG_FILE" 2>&1 < /dev/null &
+    ONCHAINOS_BIN="$ONCHAINOS_BIN" \
+      setsid "$NODE_BIN" "$INSTALL_DIR/dist/index.js" >>"$LOG_FILE" 2>&1 < /dev/null &
     echo $! > "$PID_FILE"
   else
-    nohup "$NODE_BIN" "$INSTALL_DIR/dist/index.js" >>"$LOG_FILE" 2>&1 < /dev/null &
+    ONCHAINOS_BIN="$ONCHAINOS_BIN" \
+      nohup "$NODE_BIN" "$INSTALL_DIR/dist/index.js" >>"$LOG_FILE" 2>&1 < /dev/null &
     echo $! > "$PID_FILE"
   fi
 
@@ -328,8 +330,8 @@ case "$cmd" in
     stop_bg
     ;;
   restart)
-    stop_bg
-    start_bg
+    "$0" stop
+    exec "$0" start
     ;;
   state)
     show_state
@@ -339,7 +341,7 @@ case "$cmd" in
     ;;
   run)
     shift || true
-    exec "$NODE_BIN" "$INSTALL_DIR/dist/index.js" "$@"
+    exec env ONCHAINOS_BIN="$ONCHAINOS_BIN" "$NODE_BIN" "$INSTALL_DIR/dist/index.js" "$@"
     ;;
   logs)
     touch "$LOG_FILE"
@@ -497,8 +499,9 @@ echo -e "    3. 自动使用:  连接钱包后付费模型自动生效"
 echo -e "    ${DIM}约 \$1 USDC ≈ 100 次 Claude Sonnet 请求${RESET}"
 else
 echo -e "  ${BOLD}${PAID} 想用付费模型？${RESET}"
-echo -e "    npm install -g onchainos"
-echo -e "    然后重新运行: curl -fsSL ${REPO_URL}/raw/main/install.sh | bash"
+echo -e "    在这台客户端机器安装 OKX Onchain OS / Agentic Wallet 环境"
+echo -e "    安装完成后重新运行: ${W}okclawrouter${RESET}"
+echo -e "    ${DIM}云端 backend 服务器不需要安装 onchainos${RESET}"
 fi
 
 echo ""
