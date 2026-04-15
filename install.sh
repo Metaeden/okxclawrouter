@@ -298,12 +298,18 @@ stop_bg() {
   rm -f "$PID_FILE"
 }
 
-show_state() {
+show_status_once() {
   if is_running; then
     echo "status=running pid=$(cat "$PID_FILE") port=${OKCLAWROUTER_PORT} log=${LOG_FILE}"
   else
     echo "status=stopped port=${OKCLAWROUTER_PORT} log=${LOG_FILE}"
   fi
+}
+
+show_state() {
+  show_status_once
+  touch "$LOG_FILE"
+  exec tail -n 100 -f "$LOG_FILE"
 }
 
 cmd="${1:-start}"
@@ -318,8 +324,11 @@ case "$cmd" in
     stop_bg
     start_bg
     ;;
-  state|status)
+  state)
     show_state
+    ;;
+  status)
+    show_status_once
     ;;
   run)
     shift || true
@@ -330,7 +339,7 @@ case "$cmd" in
     exec tail -n 100 -f "$LOG_FILE"
     ;;
   *)
-    echo "Usage: okclawrouter [start|stop|restart|state|run|logs]" >&2
+    echo "Usage: okclawrouter [start|stop|restart|state|status|run|logs]" >&2
     exit 1
     ;;
 esac
@@ -490,7 +499,8 @@ echo -e "    API Base URL → ${BOLD}http://localhost:8402/v1${RESET}"
 echo ""
 echo -e "  ${BOLD}${LINK} 运维命令:${RESET}"
 echo -e "    ${W}okclawrouter${RESET}        启动代理（后台运行）"
-echo -e "    ${W}okclawrouter state${RESET}  查看运行状态"
+echo -e "    ${W}okclawrouter state${RESET}  实时查看状态和日志"
+echo -e "    ${W}okclawrouter status${RESET} 一次性查看运行状态"
 echo -e "    ${W}okclawrouter stop${RESET}   停止代理"
 echo ""
 echo -e "  ${BOLD}${LINK} 测试代理:${RESET}"
