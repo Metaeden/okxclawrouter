@@ -2,7 +2,7 @@
 
 **AI 智能路由器 + X-Layer 链上微支付**
 
-免费模型即开即用，付费模型按次付费 (USDC on X-Layer)
+免费模型即开即用，付费模型默认走批量支付 (USDC on X-Layer)
 
 ## 🚀 一键安装
 
@@ -99,6 +99,11 @@ AI Agent (Cursor/VS Code) → Local Proxy (:8402) → Backend (:4002) → OpenRo
 - 云服务器只部署 `backend/`
 - 用户本机运行 `proxy/`
 - `onchainos` 只装在运行 `proxy/` 的机器上
+
+支付模式：
+- 默认: `aggr_deferred` 批量支付
+- 可选: `exact` 单次支付
+- 切换方式: 设置 `OKCLAWROUTER_PAYMENT_SCHEME`
 
 ## 🛠️ 开发
 

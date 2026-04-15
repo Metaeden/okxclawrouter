@@ -1,7 +1,7 @@
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
 import { paymentMiddleware } from "@okxweb3/x402-express";
-import { createResourceServer, NETWORK } from "./payment.js";
+import { createResourceServer, NETWORK, getConfiguredPaymentScheme } from "./payment.js";
 import { proxyToOpenRouter } from "./openrouter-proxy.js";
 import { MODEL_LIST } from "./models.js";
 import { getPrice } from "./pricing.js";
@@ -25,6 +25,7 @@ for (const key of REQUIRED_ENV) {
 
 const PORT = parseInt(process.env.PORT || "4002", 10);
 const PAY_TO = process.env.PAY_TO_ADDRESS!;
+const PAYMENT_SCHEME = getConfiguredPaymentScheme();
 
 const app = express();
 app.use(express.json({ limit: "10mb" }));
@@ -108,7 +109,7 @@ app.use(
       "POST /v1/paid/chat/completions": {
         accepts: [
           {
-            scheme: "exact",
+            scheme: PAYMENT_SCHEME,
             network: NETWORK,
             payTo: PAY_TO,
             price: getPrice("paid/claude-sonnet-4-6"), // default, overridden per-request in V2
@@ -134,7 +135,7 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 const server = app.listen(PORT, () => {
   console.log(`okclawrouter backend running on :${PORT}`);
   console.log(`  Free route:  POST /v1/free/chat/completions`);
-  console.log(`  Paid route:  POST /v1/paid/chat/completions (x402)`);
+  console.log(`  Paid route:  POST /v1/paid/chat/completions (x402:${PAYMENT_SCHEME})`);
   console.log(`  Models:      GET  /v1/models`);
   console.log(`  Health:      GET  /health`);
 });

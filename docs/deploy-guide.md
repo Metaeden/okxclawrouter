@@ -82,6 +82,8 @@ PAY_TO_ADDRESS=0xYourWalletAddressHere
 ## 3. 服务器环境配置
 
 > 这份部署文档只针对云端 `backend/`。`onchainos` 只需要安装在运行本地 `proxy/` 的客户端机器上，不需要安装在服务器。
+>
+> 当前推荐支付模式为 `aggr_deferred` 批量支付；如需切回单次支付，可设置 `OKCLAWROUTER_PAYMENT_SCHEME=exact`。
 
 ### 3.1 登录服务器
 
