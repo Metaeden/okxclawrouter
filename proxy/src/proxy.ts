@@ -210,6 +210,8 @@ export async function handleChatCompletion(
 
   let balanceWarningEmitted = false;
   let balanceWarningDetail: object | undefined;
+  let streamInitialized = false;
+  let streamHeartbeat: ReturnType<typeof setInterval> | undefined;
 
   for (let i = 0; i < modelsToTry.length; i++) {
     const model = modelsToTry[i];
@@ -447,6 +449,19 @@ export async function handleChatCompletion(
 
       } else {
         // ===== Streaming path: heartbeat + relay =====
+        if (!streamInitialized) {
+          beginStreamingResponse(res, wasTruncated);
+          writeRouterStatusChunk(
+            res,
+            model,
+            "request_started",
+            "正在请求模型，请稍候…",
+            true,
+          );
+          streamHeartbeat = startStreamingHeartbeat(res);
+          streamInitialized = true;
+        }
+
         upstreamRes = await fetchWithRetry(upstreamUrl, {
           method: "POST",
           headers,
@@ -456,14 +471,12 @@ export async function handleChatCompletion(
         // Handle 402
         if (upstreamRes.status === 402) {
           log.info("Received 402 (stream), initiating x402 payment...");
-          beginStreamingResponse(res, wasTruncated);
           writeRouterStatusChunk(
             res,
             model,
             "payment_pending",
             "正在处理 x402 支付，请稍候…",
           );
-          let paymentHeartbeat = startStreamingHeartbeat(res);
           try {
             upstreamRes = await handleX402Payment(
               upstreamRes,
@@ -471,10 +484,6 @@ export async function handleChatCompletion(
               headers,
               upstreamBody,
             );
-            if (paymentHeartbeat) {
-              clearInterval(paymentHeartbeat);
-              paymentHeartbeat = undefined;
-            }
             writeRouterStatusChunk(
               res,
               model,
@@ -486,9 +495,9 @@ export async function handleChatCompletion(
               spendControl.record(cost, model);
             }
           } catch (payErr) {
-            if (paymentHeartbeat) {
-              clearInterval(paymentHeartbeat);
-              paymentHeartbeat = undefined;
+            if (streamHeartbeat) {
+              clearInterval(streamHeartbeat);
+              streamHeartbeat = undefined;
             }
             if (payErr instanceof InsufficientBalanceError) {
               log.warn("USDC 余额不足（流式），直接返回充值提示");
@@ -539,25 +548,27 @@ export async function handleChatCompletion(
             log.warn(`模型 ${model} 返回 ${upstreamRes.status} (${category})，切换备用`);
             continue;
           }
+          if (streamHeartbeat) {
+            clearInterval(streamHeartbeat);
+            streamHeartbeat = undefined;
+          }
+          const errorBody = await upstreamRes.clone().text().catch(() => "");
+          writeRouterStatusChunk(
+            res,
+            model,
+            "upstream_error",
+            errorBody || `上游模型返回 ${upstreamRes.status}`,
+          );
+          if (!res.writableEnded) {
+            res.write("data: [DONE]\n\n");
+            res.end();
+          }
+          return;
         }
 
         // Set SSE headers and start streaming
-        if (!res.headersSent) {
-          res.status(upstreamRes.status);
-          for (const [key, value] of upstreamRes.headers.entries()) {
-            if (!["transfer-encoding", "connection"].includes(key.toLowerCase())) {
-              res.setHeader(key, value);
-            }
-          }
-          if (balanceWarningEmitted) {
-            res.setHeader("X-Router-Warning", "insufficient_balance:switched_to_free");
-          }
-          if (wasTruncated) {
-            res.setHeader("X-Router-Truncated", "true");
-          }
-        }
-
         if (!upstreamRes.body) {
+          if (streamHeartbeat) clearInterval(streamHeartbeat);
           res.end();
           return;
         }
@@ -567,23 +578,26 @@ export async function handleChatCompletion(
           res.write(buildBalanceWarningSSE(model, checkWalletStatus().address));
         }
 
-        // Start SSE heartbeat to prevent client timeout (ported from ClawRouter)
-        let heartbeatInterval = startStreamingHeartbeat(res);
-
         const reader = upstreamRes.body.getReader();
         const onClose = () => reader.cancel().catch(() => {});
         res.on("close", onClose);
 
         try {
+          let firstChunk = true;
           while (true) {
             const { done, value } = await reader.read();
             if (done || res.destroyed) break;
+            if (firstChunk && streamHeartbeat) {
+              clearInterval(streamHeartbeat);
+              streamHeartbeat = undefined;
+              firstChunk = false;
+            }
             res.write(value);
           }
         } catch (err) {
           log.debug("Stream relay interrupted:", err);
         } finally {
-          if (heartbeatInterval) clearInterval(heartbeatInterval);
+          if (streamHeartbeat) clearInterval(streamHeartbeat);
           res.removeListener("close", onClose);
           if (!res.writableEnded) res.end();
         }
@@ -785,6 +799,7 @@ function buildRouterStatusChunk(
   model: string,
   phase: string,
   message: string,
+  includeAssistantRole = false,
 ): string {
   return JSON.stringify({
     id: `router-status-${Date.now()}`,
@@ -794,7 +809,7 @@ function buildRouterStatusChunk(
     choices: [
       {
         index: 0,
-        delta: {},
+        delta: includeAssistantRole ? { role: "assistant" } : {},
         finish_reason: null,
       },
     ],
@@ -810,9 +825,10 @@ function writeRouterStatusChunk(
   model: string,
   phase: string,
   message: string,
+  includeAssistantRole = false,
 ): void {
   if (res.destroyed || res.writableEnded) return;
-  res.write(`data: ${buildRouterStatusChunk(model, phase, message)}\n\n`);
+  res.write(`data: ${buildRouterStatusChunk(model, phase, message, includeAssistantRole)}\n\n`);
 }
 
 function startStreamingHeartbeat(
