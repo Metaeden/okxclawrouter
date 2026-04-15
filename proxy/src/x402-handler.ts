@@ -11,6 +11,12 @@ interface PaymentResult {
   sessionCert?: string;
 }
 
+interface PaymentCliEnvelope {
+  ok?: boolean;
+  data?: PaymentResult;
+  message?: string;
+}
+
 interface PaymentRequirement {
   x402Version?: number;
   resource?: unknown;
@@ -128,7 +134,14 @@ export async function handleX402Payment(
       ["payment", "x402-pay", "--accepts", acceptsJson],
       { encoding: "utf-8", stdio: "pipe", timeout: 15_000 },
     );
-    paymentResult = JSON.parse(output);
+    const parsed = JSON.parse(output) as PaymentCliEnvelope | PaymentResult;
+    paymentResult =
+      typeof parsed === "object" &&
+      parsed !== null &&
+      "data" in parsed &&
+      parsed.data
+        ? parsed.data
+        : (parsed as PaymentResult);
     log.info(`x402 签名完成 (${Date.now() - paymentStart}ms)`);
   } catch (err: any) {
     const stderr = err?.stderr?.toString() || err?.message || "";

@@ -145,6 +145,51 @@ describe("handleX402Payment", () => {
     });
   });
 
+  it("unwraps onchainos CLI envelope before building PAYMENT-SIGNATURE", async () => {
+    const accepted = {
+      scheme: "exact",
+      network: "eip155:196",
+      payTo: "0xto",
+      amount: "10000",
+    };
+    execFileSyncMock.mockReturnValue(
+      JSON.stringify({
+        ok: true,
+        data: {
+          signature: "sig",
+          authorization: { from: "0xfrom", to: "0xto", value: "10000" },
+        },
+      }),
+    );
+    fetchMock.mockResolvedValueOnce(new Response("ok", { status: 200 }));
+
+    const response = new Response(null, {
+      status: 402,
+      headers: {
+        "PAYMENT-REQUIRED": encodeBase64Json({
+          x402Version: 2,
+          resource: { url: "https://paid.example/v1/chat" },
+          accepted,
+        }),
+      },
+    });
+
+    await handleX402Payment(
+      response,
+      "https://paid.example/v1/chat",
+      { "content-type": "application/json" },
+      '{"prompt":"hello"}',
+    );
+
+    const [, replayInit] = fetchMock.mock.calls[0];
+    const paymentHeader = (replayInit?.headers as Record<string, string>)["PAYMENT-SIGNATURE"];
+    const decoded = JSON.parse(Buffer.from(paymentHeader, "base64").toString());
+    expect(decoded.payload).toEqual({
+      signature: "sig",
+      authorization: { from: "0xfrom", to: "0xto", value: "10000" },
+    });
+  });
+
   it("replays v1 payments with X-PAYMENT", async () => {
     loadPolicyMock.mockReturnValue({
       security: {
