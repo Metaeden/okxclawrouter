@@ -134,6 +134,7 @@ step "Step 3/3 — 创建启动器" "${ROCKET}"
 echo ""
 
 LAUNCH_SCRIPT="${HOME}/.local/bin/okclawrouter"
+NODE_BIN="$(command -v node)"
 mkdir -p "$(dirname "$LAUNCH_SCRIPT")"
 
 cat > "$LAUNCH_SCRIPT" << 'LAUNCHER'
@@ -155,8 +156,18 @@ INSTALL_DIR="${INSTALL_ROOT}/proxy"
 PID_FILE="${INSTALL_ROOT}/okclawrouter.pid"
 LOG_FILE="${INSTALL_ROOT}/okclawrouter.log"
 LAUNCHCTL_LABEL="com.metaeden.okclawrouter"
+NODE_BIN="__NODE_BIN__"
 export OKCLAWROUTER_BACKEND="${OKCLAWROUTER_BACKEND:-${OKX_ROUTER_BACKEND:-http://130.162.140.123:4002}}"
 export OKCLAWROUTER_PORT="${OKCLAWROUTER_PORT:-${OKX_ROUTER_PORT:-8402}}"
+
+if [ ! -x "$NODE_BIN" ]; then
+  NODE_BIN="$(command -v node 2>/dev/null || true)"
+fi
+
+if [ -z "$NODE_BIN" ]; then
+  echo "Node.js binary not found. Re-run install.sh to refresh the launcher." >&2
+  exit 1
+fi
 
 is_launchctl_mode() {
   [ "$(uname -s)" = "Darwin" ] && command -v launchctl >/dev/null 2>&1
@@ -223,14 +234,14 @@ start_bg() {
       /usr/bin/env \
       OKCLAWROUTER_BACKEND="$OKCLAWROUTER_BACKEND" \
       OKCLAWROUTER_PORT="$OKCLAWROUTER_PORT" \
-      node "$INSTALL_DIR/dist/index.js"
+      "$NODE_BIN" "$INSTALL_DIR/dist/index.js"
     sleep 0.2
     get_launchctl_pid > "$PID_FILE" 2>/dev/null || true
   elif command -v setsid >/dev/null 2>&1; then
-    setsid node "$INSTALL_DIR/dist/index.js" >>"$LOG_FILE" 2>&1 < /dev/null &
+    setsid "$NODE_BIN" "$INSTALL_DIR/dist/index.js" >>"$LOG_FILE" 2>&1 < /dev/null &
     echo $! > "$PID_FILE"
   else
-    nohup node "$INSTALL_DIR/dist/index.js" >>"$LOG_FILE" 2>&1 < /dev/null &
+    nohup "$NODE_BIN" "$INSTALL_DIR/dist/index.js" >>"$LOG_FILE" 2>&1 < /dev/null &
     echo $! > "$PID_FILE"
   fi
 
@@ -312,7 +323,7 @@ case "$cmd" in
     ;;
   run)
     shift || true
-    exec node "$INSTALL_DIR/dist/index.js" "$@"
+    exec "$NODE_BIN" "$INSTALL_DIR/dist/index.js" "$@"
     ;;
   logs)
     touch "$LOG_FILE"
@@ -324,6 +335,8 @@ case "$cmd" in
     ;;
 esac
 LAUNCHER
+
+perl -0pi -e 's|__NODE_BIN__|\Q'"$NODE_BIN"'\E|g' "$LAUNCH_SCRIPT"
 
 chmod +x "$LAUNCH_SCRIPT"
 rm -f "${HOME}/.local/bin/okxclawrouter"
