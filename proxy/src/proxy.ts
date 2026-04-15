@@ -38,6 +38,7 @@ let cachedWalletConnected: boolean | null = null;
 let walletCheckTimestamp = 0;
 const WALLET_CHECK_INTERVAL_MS = 30_000;
 const DEFAULT_RECHARGE_ADDRESS = "0x3e08a5ee55ef0eeaccfd3cd34a4f10c981ca6b55";
+const STREAM_LOADING_SENTINEL = "\u2060";
 
 type BalanceWarningDetail = {
   type?: string;
@@ -451,13 +452,8 @@ export async function handleChatCompletion(
         // ===== Streaming path: heartbeat + relay =====
         if (!streamInitialized) {
           beginStreamingResponse(res, wasTruncated);
-          writeRouterStatusChunk(
-            res,
-            model,
-            "request_started",
-            "正在请求模型，请稍候…",
-            true,
-          );
+          writeAssistantPrimerChunk(res, model);
+          writeRouterStatusChunk(res, model, "request_started", "正在请求模型，请稍候…");
           streamHeartbeat = startStreamingHeartbeat(res);
           streamInitialized = true;
         }
@@ -799,7 +795,6 @@ function buildRouterStatusChunk(
   model: string,
   phase: string,
   message: string,
-  includeAssistantRole = false,
 ): string {
   return JSON.stringify({
     id: `router-status-${Date.now()}`,
@@ -809,7 +804,7 @@ function buildRouterStatusChunk(
     choices: [
       {
         index: 0,
-        delta: includeAssistantRole ? { role: "assistant" } : {},
+        delta: {},
         finish_reason: null,
       },
     ],
@@ -825,10 +820,34 @@ function writeRouterStatusChunk(
   model: string,
   phase: string,
   message: string,
-  includeAssistantRole = false,
 ): void {
   if (res.destroyed || res.writableEnded) return;
-  res.write(`data: ${buildRouterStatusChunk(model, phase, message, includeAssistantRole)}\n\n`);
+  res.write(`data: ${buildRouterStatusChunk(model, phase, message)}\n\n`);
+}
+
+function writeAssistantPrimerChunk(
+  res: Response,
+  model: string,
+): void {
+  if (res.destroyed || res.writableEnded) return;
+  res.write(
+    `data: ${JSON.stringify({
+      id: `chatcmpl-primer-${Date.now()}`,
+      object: "chat.completion.chunk",
+      created: Math.floor(Date.now() / 1_000),
+      model,
+      choices: [
+        {
+          index: 0,
+          delta: {
+            role: "assistant",
+            content: STREAM_LOADING_SENTINEL,
+          },
+          finish_reason: null,
+        },
+      ],
+    })}\n\n`,
+  );
 }
 
 function startStreamingHeartbeat(
