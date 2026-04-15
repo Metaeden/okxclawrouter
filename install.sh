@@ -336,7 +336,13 @@ case "$cmd" in
 esac
 LAUNCHER
 
-perl -0pi -e 's|__NODE_BIN__|\Q'"$NODE_BIN"'\E|g' "$LAUNCH_SCRIPT"
+python3 - "$LAUNCH_SCRIPT" "$NODE_BIN" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+node_bin = sys.argv[2]
+path.write_text(path.read_text().replace('__NODE_BIN__', node_bin))
+PY
 
 chmod +x "$LAUNCH_SCRIPT"
 rm -f "${HOME}/.local/bin/okxclawrouter"
