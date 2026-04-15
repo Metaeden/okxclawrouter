@@ -197,7 +197,11 @@ start_bg() {
     exit 0
   fi
 
-  nohup node "$INSTALL_DIR/dist/index.js" >>"$LOG_FILE" 2>&1 < /dev/null &
+  if command -v setsid >/dev/null 2>&1; then
+    setsid node "$INSTALL_DIR/dist/index.js" >>"$LOG_FILE" 2>&1 < /dev/null &
+  else
+    nohup node "$INSTALL_DIR/dist/index.js" >>"$LOG_FILE" 2>&1 < /dev/null &
+  fi
   echo $! > "$PID_FILE"
 
   if wait_until_ready; then
