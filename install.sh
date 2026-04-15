@@ -494,11 +494,13 @@ echo -e "    1. 登录钱包:  /wallet login <你的邮箱>"
 echo -e "    2. 充值 USDC: 发送到 X Layer 钱包"
 echo -e "       ${LINK} https://web3.okx.com/onchainos"
 echo -e "    3. 自动使用:  连接钱包后付费模型自动生效"
+echo -e "    ${DIM}默认支付方式: aggr_deferred 批量支付，无需手动切换${RESET}"
 echo -e "    ${DIM}约 \$1 USDC ≈ 100 次 Claude Sonnet 请求${RESET}"
 else
 echo -e "  ${BOLD}${PAID} 想用付费模型？${RESET}"
 echo -e "    在这台客户端机器安装 OKX Onchain OS / Agentic Wallet 环境"
 echo -e "    安装完成后重新运行: ${W}okclawrouter${RESET}"
+echo -e "    ${DIM}默认支付方式: aggr_deferred 批量支付${RESET}"
 echo -e "    ${DIM}云端 backend 服务器不需要安装 onchainos${RESET}"
 fi
 
