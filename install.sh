@@ -154,10 +154,30 @@ fi
 INSTALL_DIR="${INSTALL_ROOT}/proxy"
 PID_FILE="${INSTALL_ROOT}/okclawrouter.pid"
 LOG_FILE="${INSTALL_ROOT}/okclawrouter.log"
+LAUNCHCTL_LABEL="com.metaeden.okclawrouter"
 export OKCLAWROUTER_BACKEND="${OKCLAWROUTER_BACKEND:-${OKX_ROUTER_BACKEND:-http://130.162.140.123:4002}}"
 export OKCLAWROUTER_PORT="${OKCLAWROUTER_PORT:-${OKX_ROUTER_PORT:-8402}}"
 
+is_launchctl_mode() {
+  [ "$(uname -s)" = "Darwin" ] && command -v launchctl >/dev/null 2>&1
+}
+
+get_launchctl_pid() {
+  launchctl list | awk -v label="$LAUNCHCTL_LABEL" '$3 == label { print $1 }'
+}
+
 is_running() {
+  if is_launchctl_mode; then
+    local launchctl_pid
+    launchctl_pid="$(get_launchctl_pid)"
+    if [ -n "$launchctl_pid" ] && [ "$launchctl_pid" != "-" ] && kill -0 "$launchctl_pid" 2>/dev/null; then
+      echo "$launchctl_pid" > "$PID_FILE"
+      return 0
+    fi
+    rm -f "$PID_FILE"
+    return 1
+  fi
+
   if [ ! -f "$PID_FILE" ]; then
     return 1
   fi
@@ -197,12 +217,22 @@ start_bg() {
     exit 0
   fi
 
-  if command -v setsid >/dev/null 2>&1; then
+  if is_launchctl_mode; then
+    launchctl remove "$LAUNCHCTL_LABEL" >/dev/null 2>&1 || true
+    launchctl submit -l "$LAUNCHCTL_LABEL" -o "$LOG_FILE" -e "$LOG_FILE" -- \
+      /usr/bin/env \
+      OKCLAWROUTER_BACKEND="$OKCLAWROUTER_BACKEND" \
+      OKCLAWROUTER_PORT="$OKCLAWROUTER_PORT" \
+      node "$INSTALL_DIR/dist/index.js"
+    sleep 0.2
+    get_launchctl_pid > "$PID_FILE" 2>/dev/null || true
+  elif command -v setsid >/dev/null 2>&1; then
     setsid node "$INSTALL_DIR/dist/index.js" >>"$LOG_FILE" 2>&1 < /dev/null &
+    echo $! > "$PID_FILE"
   else
     nohup node "$INSTALL_DIR/dist/index.js" >>"$LOG_FILE" 2>&1 < /dev/null &
+    echo $! > "$PID_FILE"
   fi
-  echo $! > "$PID_FILE"
 
   if wait_until_ready; then
     echo "okclawrouter started on http://127.0.0.1:${OKCLAWROUTER_PORT} (pid $(cat "$PID_FILE"))."
@@ -223,6 +253,24 @@ stop_bg() {
 
   local pid
   pid="$(cat "$PID_FILE")"
+
+  if is_launchctl_mode; then
+    launchctl remove "$LAUNCHCTL_LABEL" >/dev/null 2>&1 || true
+
+    for _ in $(seq 1 20); do
+      if ! kill -0 "$pid" 2>/dev/null; then
+        rm -f "$PID_FILE"
+        echo "okclawrouter stopped."
+        exit 0
+      fi
+      sleep 0.5
+    done
+
+    rm -f "$PID_FILE"
+    echo "okclawrouter stopped."
+    exit 0
+  fi
+
   kill "$pid" 2>/dev/null || true
 
   for _ in $(seq 1 20); do
