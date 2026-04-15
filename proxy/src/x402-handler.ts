@@ -36,8 +36,15 @@ export class PaymentBlockedByScanError extends Error {
 }
 
 export class PaymentReplayRejectedError extends Error {
-  constructor(public readonly status: number) {
-    super(`支付已签名，但后端未接受支付凭证（重放后仍返回 ${status}）`);
+  constructor(
+    public readonly status: number,
+    public readonly responseBody?: string,
+  ) {
+    super(
+      responseBody
+        ? `支付已签名，但后端未接受支付凭证（重放后仍返回 ${status}）：${responseBody}`
+        : `支付已签名，但后端未接受支付凭证（重放后仍返回 ${status}）`,
+    );
     this.name = "PaymentReplayRejectedError";
   }
 }
@@ -183,7 +190,15 @@ export async function handleX402Payment(
     `付费请求重放完成: status=${replayResponse.status} elapsed=${Date.now() - paymentStart}ms`,
   );
   if (replayResponse.status === 402) {
-    throw new PaymentReplayRejectedError(replayResponse.status);
+    const replayBody = await replayResponse
+      .clone()
+      .text()
+      .then((body) => body.trim())
+      .catch(() => "");
+    throw new PaymentReplayRejectedError(
+      replayResponse.status,
+      replayBody || undefined,
+    );
   }
   return replayResponse;
 }

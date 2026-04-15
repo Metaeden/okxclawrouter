@@ -287,6 +287,12 @@ describe("handleX402Payment", () => {
 
     await expect(
       handleX402Payment(response, "https://paid.example/v1/chat", {}, "{}"),
-    ).rejects.toBeInstanceOf(PaymentReplayRejectedError);
+    ).rejects.toEqual(
+      expect.objectContaining<Partial<PaymentReplayRejectedError>>({
+        name: "PaymentReplayRejectedError",
+        status: 402,
+        responseBody: "still blocked",
+      }),
+    );
   });
 });
