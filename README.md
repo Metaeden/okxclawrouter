@@ -34,7 +34,6 @@ okclawrouter
 在 OpenClaw 里切换模型：
 ```
 /model okclawrouter/openrouter/free            # 免费
-/model okclawrouter/qwen/qwen3-coder:free      # 免费
 /model okclawrouter/paid/claude-sonnet-4-6     # 付费
 /model okclawrouter/paid/gpt-5.4               # 付费
 /model okclawrouter/paid/gemini-3.1-pro        # 付费
@@ -43,7 +42,6 @@ okclawrouter
 OpenClaw 列表里会显示为：
 ```
 [okclawrouter] OpenRouter Free
-[okclawrouter] Qwen3 Coder
 [okclawrouter] Claude Sonnet 4.6
 ```
 
@@ -58,7 +56,6 @@ API Base URL → http://localhost:8402/v1
 | 模型 | 层级 | 费用 |
 |------|------|------|
 | `openrouter/free` | 🆓 FREE | $0 |
-| `qwen/qwen3-coder:free` | 🆓 FREE | $0 |
 | `paid/claude-sonnet-4-6` | 💰 PAID | $0.01/req |
 | `paid/gpt-5.4` | 💰 PAID | $0.01/req |
 | `paid/gemini-3.1-pro` | 💰 PAID | $0.008/req |

@@ -79,7 +79,7 @@ export function setSpendLimits(limits: Parameters<SpendControl["setLimits"]>[0])
  * Re-route to free tier when paid model fails due to balance.
  */
 function freeFallbackModels(): string[] {
-  return ["openrouter/free", "qwen/qwen3-coder:free"];
+  return ["openrouter/free"];
 }
 
 function isFreeModel(model: string): boolean {
@@ -443,6 +443,14 @@ export async function handleChatCompletion(
         // Handle 402
         if (upstreamRes.status === 402) {
           log.info("Received 402 (stream), initiating x402 payment...");
+          beginStreamingResponse(res, wasTruncated);
+          writeRouterStatusChunk(
+            res,
+            model,
+            "payment_pending",
+            "正在处理 x402 支付，请稍候…",
+          );
+          let paymentHeartbeat = startStreamingHeartbeat(res);
           try {
             upstreamRes = await handleX402Payment(
               upstreamRes,
@@ -450,11 +458,25 @@ export async function handleChatCompletion(
               headers,
               upstreamBody,
             );
+            if (paymentHeartbeat) {
+              clearInterval(paymentHeartbeat);
+              paymentHeartbeat = undefined;
+            }
+            writeRouterStatusChunk(
+              res,
+              model,
+              "payment_complete",
+              "支付完成，正在等待模型响应…",
+            );
             if (upstreamRes.status >= 200 && upstreamRes.status < 300) {
               const cost = MODEL_PRICES[model] ?? 0.01;
               spendControl.record(cost, model);
             }
           } catch (payErr) {
+            if (paymentHeartbeat) {
+              clearInterval(paymentHeartbeat);
+              paymentHeartbeat = undefined;
+            }
             if (payErr instanceof InsufficientBalanceError) {
               log.warn("USDC 余额不足（流式），降级至免费模型");
               balanceWarningEmitted = true;
@@ -471,21 +493,19 @@ export async function handleChatCompletion(
             }
             if (payErr instanceof PaymentBlockedByScanError) {
               log.error(`支付被安全扫描拦截（流式）: ${payErr.reason}`);
-              if (!res.headersSent) {
-                res.status(403).json({
-                  error: "payment_blocked_by_security_scan",
-                  message: payErr.message,
-                });
+              writeRouterStatusChunk(res, model, "payment_blocked", payErr.message);
+              if (!res.writableEnded) {
+                res.write("data: [DONE]\n\n");
+                res.end();
               }
               return;
             }
             if (payErr instanceof PaymentReplayRejectedError) {
               log.error(`支付重放失败（流式）: ${payErr.message}`);
-              if (!res.headersSent) {
-                res.status(402).json({
-                  error: "payment_rejected_after_signing",
-                  message: payErr.message,
-                });
+              writeRouterStatusChunk(res, model, "payment_failed", payErr.message);
+              if (!res.writableEnded) {
+                res.write("data: [DONE]\n\n");
+                res.end();
               }
               return;
             }
@@ -507,17 +527,19 @@ export async function handleChatCompletion(
         }
 
         // Set SSE headers and start streaming
-        res.status(upstreamRes.status);
-        for (const [key, value] of upstreamRes.headers.entries()) {
-          if (!["transfer-encoding", "connection"].includes(key.toLowerCase())) {
-            res.setHeader(key, value);
+        if (!res.headersSent) {
+          res.status(upstreamRes.status);
+          for (const [key, value] of upstreamRes.headers.entries()) {
+            if (!["transfer-encoding", "connection"].includes(key.toLowerCase())) {
+              res.setHeader(key, value);
+            }
           }
-        }
-        if (balanceWarningEmitted) {
-          res.setHeader("X-Router-Warning", "insufficient_balance:switched_to_free");
-        }
-        if (wasTruncated) {
-          res.setHeader("X-Router-Truncated", "true");
+          if (balanceWarningEmitted) {
+            res.setHeader("X-Router-Warning", "insufficient_balance:switched_to_free");
+          }
+          if (wasTruncated) {
+            res.setHeader("X-Router-Truncated", "true");
+          }
         }
 
         if (!upstreamRes.body) {
@@ -531,18 +553,7 @@ export async function handleChatCompletion(
         }
 
         // Start SSE heartbeat to prevent client timeout (ported from ClawRouter)
-        let heartbeatInterval: ReturnType<typeof setInterval> | undefined;
-        if (!res.destroyed) {
-          res.write(": heartbeat\n\n");
-          heartbeatInterval = setInterval(() => {
-            if (!res.destroyed && !res.writableEnded) {
-              res.write(": heartbeat\n\n");
-            } else {
-              clearInterval(heartbeatInterval);
-              heartbeatInterval = undefined;
-            }
-          }, HEARTBEAT_INTERVAL_MS);
-        }
+        let heartbeatInterval = startStreamingHeartbeat(res);
 
         const reader = upstreamRes.body.getReader();
         const onClose = () => reader.cancel().catch(() => {});
@@ -639,6 +650,70 @@ function sendCachedResponse(
     latencyMs: Date.now() - startTime,
     success: cached.status >= 200 && cached.status < 300,
   });
+}
+
+function beginStreamingResponse(res: Response, wasTruncated: boolean): void {
+  if (res.headersSent) return;
+
+  res.status(200);
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  if (wasTruncated) {
+    res.setHeader("X-Router-Truncated", "true");
+  }
+  res.flushHeaders?.();
+}
+
+function buildRouterStatusChunk(
+  model: string,
+  phase: string,
+  message: string,
+): string {
+  return JSON.stringify({
+    id: `router-status-${Date.now()}`,
+    object: "chat.completion.chunk",
+    created: Math.floor(Date.now() / 1_000),
+    model,
+    choices: [
+      {
+        index: 0,
+        delta: {},
+        finish_reason: null,
+      },
+    ],
+    x_router_status: {
+      phase,
+      message,
+    },
+  });
+}
+
+function writeRouterStatusChunk(
+  res: Response,
+  model: string,
+  phase: string,
+  message: string,
+): void {
+  if (res.destroyed || res.writableEnded) return;
+  res.write(`data: ${buildRouterStatusChunk(model, phase, message)}\n\n`);
+}
+
+function startStreamingHeartbeat(
+  res: Response,
+): ReturnType<typeof setInterval> | undefined {
+  if (res.destroyed || res.writableEnded) return undefined;
+
+  res.write(": heartbeat\n\n");
+  const heartbeatInterval = setInterval(() => {
+    if (!res.destroyed && !res.writableEnded) {
+      res.write(": heartbeat\n\n");
+    } else {
+      clearInterval(heartbeatInterval);
+    }
+  }, HEARTBEAT_INTERVAL_MS);
+
+  return heartbeatInterval;
 }
 
 function buildBalanceWarningSSE(

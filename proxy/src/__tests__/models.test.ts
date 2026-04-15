@@ -7,8 +7,8 @@ import {
 } from "../models.js";
 
 describe("proxy models", () => {
-  it("should have 2 free models", () => {
-    expect(FREE_MODELS).toHaveLength(2);
+  it("should have 1 free model", () => {
+    expect(FREE_MODELS).toHaveLength(1);
   });
 
   it("should have 3 paid models", () => {
@@ -16,7 +16,7 @@ describe("proxy models", () => {
   });
 
   it("ALL_MODELS should be free + paid combined", () => {
-    expect(ALL_MODELS).toHaveLength(5);
+    expect(ALL_MODELS).toHaveLength(4);
   });
 
   it("should validate known models", () => {

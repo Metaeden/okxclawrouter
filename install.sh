@@ -414,7 +414,6 @@ if [ -f "$OPENCLAW_CONFIG" ]; then
       apiKey: 'sk-okclawrouter',
       models: [
         { id: 'openrouter/free',          name: '[okclawrouter] OpenRouter Free',    api: 'openai-completions', reasoning: false, input: ['text'], cost: {input:0,output:0,cacheRead:0,cacheWrite:0}, contextWindow: 128000,  maxTokens: 8192 },
-        { id: 'qwen/qwen3-coder:free',    name: '[okclawrouter] Qwen3 Coder',        api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0,output:0,cacheRead:0,cacheWrite:0}, contextWindow: 128000,  maxTokens: 8192 },
         { id: 'paid/claude-sonnet-4-6',   name: '[okclawrouter] Claude Sonnet 4.6',  api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0.01, output:0.01,  cacheRead:0, cacheWrite:0}, contextWindow: 200000,  maxTokens: 64000 },
         { id: 'paid/gpt-5.4',             name: '[okclawrouter] GPT-5.4',            api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0.01, output:0.01,  cacheRead:0, cacheWrite:0}, contextWindow: 400000,  maxTokens: 128000 },
         { id: 'paid/gemini-3.1-pro',      name: '[okclawrouter] Gemini 3.1 Pro',     api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0.008,output:0.008, cacheRead:0, cacheWrite:0}, contextWindow: 1050000, maxTokens: 65536 }
@@ -431,7 +430,6 @@ if [ -f "$OPENCLAW_CONFIG" ]; then
     }
 
     cfg.agents.defaults.models['okclawrouter/openrouter/free'] = { alias: '[okclawrouter] OpenRouter Free' };
-    cfg.agents.defaults.models['okclawrouter/qwen/qwen3-coder:free'] = { alias: '[okclawrouter] Qwen3 Coder' };
     cfg.agents.defaults.models['okclawrouter/paid/claude-sonnet-4-6'] = { alias: '[okclawrouter] Claude Sonnet 4.6' };
     cfg.agents.defaults.models['okclawrouter/paid/gpt-5.4'] = { alias: '[okclawrouter] GPT-5.4' };
     cfg.agents.defaults.models['okclawrouter/paid/gemini-3.1-pro'] = { alias: '[okclawrouter] Gemini 3.1 Pro' };
@@ -484,7 +482,7 @@ DONE
 echo -e "${RESET}"
 
 echo -e "  ${BOLD}${FIRE} 免费模型 (即开即用):${RESET}"
-echo -e "    ${FREE} OpenRouter Free  /  Qwen3 Coder"
+echo -e "    ${FREE} OpenRouter Free"
 echo ""
 echo -e "  ${BOLD}${STAR} 启动代理:${RESET}"
 echo -e "    ${W} okclawrouter${RESET}"

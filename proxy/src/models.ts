@@ -5,7 +5,6 @@ export interface Model {
 
 export const FREE_MODELS: Model[] = [
   { id: "openrouter/free", tier: "free" },
-  { id: "qwen/qwen3-coder:free", tier: "free" },
 ];
 
 export const PAID_MODELS: Model[] = [

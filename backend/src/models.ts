@@ -8,7 +8,6 @@ export interface ModelDef {
 export const MODEL_MAP: Record<string, string> = {
   // FREE tier — explicitly zero-cost models on OpenRouter
   "openrouter/free": "openrouter/free",
-  "qwen/qwen3-coder:free": "qwen/qwen3-coder:free",
   // PAID tier
   "paid/claude-sonnet-4-6": "anthropic/claude-sonnet-4-6",
   "paid/gpt-5.4": "openai/gpt-5.4",

@@ -2,14 +2,14 @@ import { describe, it, expect } from "vitest";
 import { MODEL_MAP, MODEL_LIST, resolveModel } from "../models.js";
 
 describe("models", () => {
-  it("should have 5 models defined", () => {
-    expect(Object.keys(MODEL_MAP)).toHaveLength(5);
+  it("should have 4 models defined", () => {
+    expect(Object.keys(MODEL_MAP)).toHaveLength(4);
   });
 
-  it("should have 2 free and 3 paid models", () => {
+  it("should have 1 free and 3 paid models", () => {
     const free = MODEL_LIST.filter((m) => m.tier === "free");
     const paid = MODEL_LIST.filter((m) => m.tier === "paid");
-    expect(free).toHaveLength(2);
+    expect(free).toHaveLength(1);
     expect(paid).toHaveLength(3);
   });
 

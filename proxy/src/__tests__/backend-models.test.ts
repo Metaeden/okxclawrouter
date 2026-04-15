@@ -31,7 +31,6 @@ describe("backend model discovery", () => {
     const models = await getAdvertisedModels();
     expect(models.map((model) => model.id)).toEqual([
       "openrouter/free",
-      "qwen/qwen3-coder:free",
       "paid/claude-sonnet-4-6",
     ]);
   });
@@ -55,13 +54,11 @@ describe("backend model discovery", () => {
     await expect(
       filterSupportedModels([
         "openrouter/free",
-        "qwen/qwen3-coder:free",
         "paid/gpt-5.4",
         "paid/gpt-5.4",
       ]),
     ).resolves.toEqual([
       "openrouter/free",
-      "qwen/qwen3-coder:free",
       "paid/gpt-5.4",
     ]);
   });
@@ -70,7 +67,7 @@ describe("backend model discovery", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
 
     const supported = await getSupportedModelIds();
-    expect(supported.has("qwen/qwen3-coder:free")).toBe(true);
+    expect(supported.has("openrouter/free")).toBe(true);
     expect(supported.has("paid/gemini-3.1-pro")).toBe(true);
   });
 });

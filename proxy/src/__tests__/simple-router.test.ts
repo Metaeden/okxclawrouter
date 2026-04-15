@@ -24,7 +24,7 @@ describe("simple-router", () => {
       true,
     );
     expect(decision.tier).toBe("PAID");
-    expect(decision.model).toBe("paid/claude-sonnet-4-6");
+    expect(decision.model).toBe("paid/gpt-5.4");
   });
 
   it("should detect reasoning signals and pick reasoning model", () => {
@@ -44,7 +44,7 @@ describe("simple-router", () => {
       true,
     );
     expect(decision.tier).toBe("PAID");
-    expect(decision.model).toBe("paid/gemini-3.1-pro");
+    expect(decision.model).toBe("paid/gpt-5.4");
   });
 
   it("should use explicitly requested model", () => {
@@ -77,7 +77,7 @@ describe("simple-router", () => {
       false,
     );
     expect(decision.tier).toBe("PAID");
-    expect(decision.model).toBe("paid/claude-sonnet-4-6");
+    expect(decision.model).toBe("paid/gpt-5.4");
   });
 
   it("should include fallbacks", () => {

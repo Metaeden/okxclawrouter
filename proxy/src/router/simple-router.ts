@@ -4,13 +4,13 @@ import config from "../config.js";
 const FREE = {
   general: "openrouter/free",
   reasoning: "openrouter/free",
-  fallbacks: ["qwen/qwen3-coder:free"],
+  fallbacks: [],
 };
 
 const PAID = {
-  general: "paid/claude-sonnet-4-6",
-  reasoning: "paid/gemini-3.1-pro",
-  fallbacks: ["paid/gpt-5.4"],
+  general: "paid/gpt-5.4",
+  reasoning: "paid/gpt-5.4",
+  fallbacks: ["paid/claude-sonnet-4-6", "paid/gemini-3.1-pro"],
 };
 
 const REASONING_SIGNALS = [
