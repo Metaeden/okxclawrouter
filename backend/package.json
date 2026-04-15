@@ -1,7 +1,7 @@
 {
-  "name": "okxclawrouter-backend",
+  "name": "okclawrouter-backend",
   "version": "0.1.0",
-  "description": "OKXClawRouter backend — x402 payment + OpenRouter proxy",
+  "description": "okclawrouter backend — x402 payment + OpenRouter proxy",
   "type": "module",
   "main": "dist/server.js",
   "scripts": {

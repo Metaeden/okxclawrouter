@@ -1,4 +1,4 @@
-# OKXClawRouter — Product Requirements Document (PRD)
+# okclawrouter — Product Requirements Document (PRD)
 
 > Version: 1.0  
 > Date: 2026-04-13  
@@ -8,9 +8,9 @@
 
 ## 1. Product Overview
 
-### 1.1 What is OKXClawRouter?
+### 1.1 What is okclawrouter?
 
-OKXClawRouter is an AI Agent-oriented LLM smart router. Based on the ClawRouter open-source project, it replaces the payment pipeline with **OKX Agentic Wallet + X Layer x402**, and the backend model service connects to the **OpenRouter API**.
+okclawrouter is an AI Agent-oriented LLM smart router. Based on the ClawRouter open-source project, it replaces the payment pipeline with **OKX Agentic Wallet + X Layer x402**, and the backend model service connects to the **OpenRouter API**.
 
 Users install it with a single command after having OpenClaw. Free models work out of the box; paid models use USDC micropayments on X Layer via OKX Agentic Wallet.
 
@@ -25,7 +25,7 @@ Users install it with a single command after having OpenClaw. Free models work o
 
 ### 1.3 Key Differences from ClawRouter
 
-| Dimension | ClawRouter (Original) | OKXClawRouter |
+| Dimension | ClawRouter (Original) | okclawrouter |
 |-----------|----------------------|---------------|
 | Wallet | Local BIP-39, user manages mnemonic | OKX Agentic Wallet, email login |
 | Payment Chain | Base / Solana, @x402/* SDK | X Layer (eip155:196), OKX x402 SDK |
@@ -263,13 +263,13 @@ The install script:
 2. Checks onchainos CLI (optional — only needed for paid models)
 3. Clones/downloads the proxy package
 4. Installs dependencies and builds
-5. Creates `~/.local/bin/okxclawrouter` launcher script
+5. Creates `~/.local/bin/okclawrouter` launcher script
 
 ### 7.2 First Use
 
 ```
 ═══════════════════════════════════════════════════════
-  OKXClawRouter v0.1.0
+  okclawrouter v0.1.0
 ═══════════════════════════════════════════════════════
 
   Free models ready — use without login:
@@ -310,7 +310,7 @@ Users code normally in Cursor / VS Code / OpenClaw. The router works in the back
 ## 8. Project Structure
 
 ```
-okxclawrouter/
+okclawrouter/
 ├── backend/                          # Backend service (deploy to cloud)
 │   ├── src/
 │   │   ├── server.ts                 # Express entry point

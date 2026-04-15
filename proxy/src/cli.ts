@@ -318,7 +318,7 @@ function handleTopup(sub: string | undefined): string {
 
 function handleHelp(): string {
   return [
-    "OKXClawRouter 命令列表:",
+    "okclawrouter 命令列表:",
     "",
     "  /wallet login <邮箱>         登录 OKX Agentic Wallet",
     "  /wallet status               查看钱包状态和余额",

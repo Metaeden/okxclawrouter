@@ -14,7 +14,8 @@ PAID="💰"    STAR="⭐"     BRAIN="🧠"   FIRE="🔥"
 WAVE="👋"    BOOK="📖"     DICE="🎲"
 
 REPO_URL="https://github.com/Metaeden/okxclawrouter"
-INSTALL_DIR="${HOME}/.okxclawrouter"
+INSTALL_DIR="${HOME}/.okclawrouter"
+LEGACY_INSTALL_DIR="${HOME}/.okxclawrouter"
 
 # ── Banner ─────────────────────────────────────────────────────
 echo ""
@@ -22,7 +23,7 @@ echo -e "${BOLD}${C}"
 cat << 'BANNER'
     ╔══════════════════════════════════════════════════╗
     ║                                                  ║
-    ║       🦞  OKXClawRouter  Installer  🦞           ║
+    ║       🦞   okclawrouter Installer  🦞           ║
     ║                                                  ║
     ║   AI Router + x402 Micropayments on X-Layer      ║
     ║                                                  ║
@@ -86,6 +87,16 @@ echo ""
 step "Step 2/3 — 安装代理" "${PACK}"
 echo ""
 
+if [ ! -d "$INSTALL_DIR" ] && [ -d "$LEGACY_INSTALL_DIR" ]; then
+  warn "检测到旧安装目录，迁移到 ~/.okclawrouter ..."
+  if mv "$LEGACY_INSTALL_DIR" "$INSTALL_DIR" 2>/dev/null; then
+    ok "旧安装目录已迁移"
+  else
+    warn "旧安装目录迁移失败，继续复用 ~/.okxclawrouter"
+    INSTALL_DIR="$LEGACY_INSTALL_DIR"
+  fi
+fi
+
 if [ -d "$INSTALL_DIR" ]; then
   warn "检测到已有安装，更新中..."
   cd "$INSTALL_DIR"
@@ -122,18 +133,148 @@ echo ""
 step "Step 3/3 — 创建启动器" "${ROCKET}"
 echo ""
 
-LAUNCH_SCRIPT="${HOME}/.local/bin/okxclawrouter"
+LAUNCH_SCRIPT="${HOME}/.local/bin/okclawrouter"
 mkdir -p "$(dirname "$LAUNCH_SCRIPT")"
 
 cat > "$LAUNCH_SCRIPT" << 'LAUNCHER'
 #!/usr/bin/env bash
-INSTALL_DIR="${HOME}/.okxclawrouter/proxy"
-export OKX_ROUTER_BACKEND="${OKX_ROUTER_BACKEND:-http://130.162.140.123:4002}"
-export OKX_ROUTER_PORT="${OKX_ROUTER_PORT:-8402}"
-node "$INSTALL_DIR/dist/index.js" "$@"
+set -euo pipefail
+
+INSTALL_ROOT="${HOME}/.okclawrouter"
+LEGACY_INSTALL_ROOT="${HOME}/.okxclawrouter"
+
+if [ ! -d "$INSTALL_ROOT" ] && [ -d "$LEGACY_INSTALL_ROOT" ]; then
+  mv "$LEGACY_INSTALL_ROOT" "$INSTALL_ROOT" 2>/dev/null || true
+fi
+
+if [ ! -d "${INSTALL_ROOT}/proxy" ] && [ -d "${LEGACY_INSTALL_ROOT}/proxy" ]; then
+  INSTALL_ROOT="$LEGACY_INSTALL_ROOT"
+fi
+
+INSTALL_DIR="${INSTALL_ROOT}/proxy"
+PID_FILE="${INSTALL_ROOT}/okclawrouter.pid"
+LOG_FILE="${INSTALL_ROOT}/okclawrouter.log"
+export OKCLAWROUTER_BACKEND="${OKCLAWROUTER_BACKEND:-${OKX_ROUTER_BACKEND:-http://130.162.140.123:4002}}"
+export OKCLAWROUTER_PORT="${OKCLAWROUTER_PORT:-${OKX_ROUTER_PORT:-8402}}"
+
+is_running() {
+  if [ ! -f "$PID_FILE" ]; then
+    return 1
+  fi
+
+  local pid
+  pid="$(cat "$PID_FILE" 2>/dev/null || true)"
+  if [ -z "$pid" ]; then
+    rm -f "$PID_FILE"
+    return 1
+  fi
+
+  if kill -0 "$pid" 2>/dev/null; then
+    return 0
+  fi
+
+  rm -f "$PID_FILE"
+  return 1
+}
+
+wait_until_ready() {
+  local tries=0
+  while [ "$tries" -lt 20 ]; do
+    if curl -fsS "http://127.0.0.1:${OKCLAWROUTER_PORT}/health" >/dev/null 2>&1; then
+      return 0
+    fi
+    tries=$((tries + 1))
+    sleep 0.5
+  done
+  return 1
+}
+
+start_bg() {
+  mkdir -p "$INSTALL_ROOT"
+
+  if is_running; then
+    echo "okclawrouter already running (pid $(cat "$PID_FILE"))."
+    exit 0
+  fi
+
+  nohup node "$INSTALL_DIR/dist/index.js" >>"$LOG_FILE" 2>&1 < /dev/null &
+  echo $! > "$PID_FILE"
+
+  if wait_until_ready; then
+    echo "okclawrouter started on http://127.0.0.1:${OKCLAWROUTER_PORT} (pid $(cat "$PID_FILE"))."
+    exit 0
+  fi
+
+  echo "Failed to start okclawrouter. Recent logs:" >&2
+  tail -n 60 "$LOG_FILE" >&2 || true
+  rm -f "$PID_FILE"
+  exit 1
+}
+
+stop_bg() {
+  if ! is_running; then
+    echo "okclawrouter is not running."
+    exit 0
+  fi
+
+  local pid
+  pid="$(cat "$PID_FILE")"
+  kill "$pid" 2>/dev/null || true
+
+  for _ in $(seq 1 20); do
+    if ! kill -0 "$pid" 2>/dev/null; then
+      rm -f "$PID_FILE"
+      echo "okclawrouter stopped."
+      exit 0
+    fi
+    sleep 0.5
+  done
+
+  echo "okclawrouter did not stop in time; forcing kill." >&2
+  kill -9 "$pid" 2>/dev/null || true
+  rm -f "$PID_FILE"
+}
+
+show_state() {
+  if is_running; then
+    echo "status=running pid=$(cat "$PID_FILE") port=${OKCLAWROUTER_PORT} log=${LOG_FILE}"
+  else
+    echo "status=stopped port=${OKCLAWROUTER_PORT} log=${LOG_FILE}"
+  fi
+}
+
+cmd="${1:-start}"
+case "$cmd" in
+  start)
+    start_bg
+    ;;
+  stop)
+    stop_bg
+    ;;
+  restart)
+    stop_bg
+    start_bg
+    ;;
+  state|status)
+    show_state
+    ;;
+  run)
+    shift || true
+    exec node "$INSTALL_DIR/dist/index.js" "$@"
+    ;;
+  logs)
+    touch "$LOG_FILE"
+    exec tail -n 100 -f "$LOG_FILE"
+    ;;
+  *)
+    echo "Usage: okclawrouter [start|stop|restart|state|run|logs]" >&2
+    exit 1
+    ;;
+esac
 LAUNCHER
 
 chmod +x "$LAUNCH_SCRIPT"
+rm -f "${HOME}/.local/bin/okxclawrouter"
 
 # Ensure ~/.local/bin is in PATH
 if [[ ":$PATH:" != *":${HOME}/.local/bin:"* ]]; then
@@ -151,6 +292,15 @@ fi
 
 ok "启动器已创建: $LAUNCH_SCRIPT"
 
+echo -e "    ${DIM}启动本地代理...${RESET}"
+if "$LAUNCH_SCRIPT" start; then
+  ok "本地代理已启动"
+else
+  fail "本地代理启动失败"
+  echo -e "    ${DIM}查看日志: $HOME/.okclawrouter/okclawrouter.log${RESET}"
+  exit 1
+fi
+
 # ── Step 3.5: Auto-configure OpenClaw ──────────────────────────
 OPENCLAW_CONFIG="$HOME/.openclaw/openclaw.json"
 if [ -f "$OPENCLAW_CONFIG" ]; then
@@ -163,27 +313,34 @@ if [ -f "$OPENCLAW_CONFIG" ]; then
     const cfg = JSON.parse(fs.readFileSync('$OPENCLAW_CONFIG', 'utf8'));
     if (!cfg.models) cfg.models = { mode: 'merge', providers: {} };
     if (!cfg.models.providers) cfg.models.providers = {};
-    cfg.models.providers.okxclawrouter = {
+    delete cfg.models.providers.okxclawrouter;
+    cfg.models.providers.okclawrouter = {
       baseUrl: 'http://127.0.0.1:8402/v1',
       api: 'openai-completions',
-      apiKey: 'sk-okxclawrouter',
+      apiKey: 'sk-okclawrouter',
       models: [
-        { id: 'openrouter/free',          name: 'okxclawrouter 🆓 OpenRouter Free',    api: 'openai-completions', reasoning: false, input: ['text'], cost: {input:0,output:0,cacheRead:0,cacheWrite:0}, contextWindow: 128000,  maxTokens: 8192 },
-        { id: 'qwen/qwen3-coder:free',    name: 'okxclawrouter 🆓 Qwen3 Coder',        api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0,output:0,cacheRead:0,cacheWrite:0}, contextWindow: 128000,  maxTokens: 8192 },
-        { id: 'paid/claude-sonnet-4-6',   name: 'okxclawrouter 💰 Claude Sonnet 4.6',  api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0.01, output:0.01,  cacheRead:0, cacheWrite:0}, contextWindow: 200000,  maxTokens: 64000 },
-        { id: 'paid/gpt-5.4',             name: 'okxclawrouter 💰 GPT-5.4',            api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0.01, output:0.01,  cacheRead:0, cacheWrite:0}, contextWindow: 400000,  maxTokens: 128000 },
-        { id: 'paid/gemini-3.1-pro',      name: 'okxclawrouter 💰 Gemini 3.1 Pro',     api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0.008,output:0.008, cacheRead:0, cacheWrite:0}, contextWindow: 1050000, maxTokens: 65536 }
+        { id: 'openrouter/free',          name: '[okclawrouter] OpenRouter Free',    api: 'openai-completions', reasoning: false, input: ['text'], cost: {input:0,output:0,cacheRead:0,cacheWrite:0}, contextWindow: 128000,  maxTokens: 8192 },
+        { id: 'qwen/qwen3-coder:free',    name: '[okclawrouter] Qwen3 Coder',        api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0,output:0,cacheRead:0,cacheWrite:0}, contextWindow: 128000,  maxTokens: 8192 },
+        { id: 'paid/claude-sonnet-4-6',   name: '[okclawrouter] Claude Sonnet 4.6',  api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0.01, output:0.01,  cacheRead:0, cacheWrite:0}, contextWindow: 200000,  maxTokens: 64000 },
+        { id: 'paid/gpt-5.4',             name: '[okclawrouter] GPT-5.4',            api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0.01, output:0.01,  cacheRead:0, cacheWrite:0}, contextWindow: 400000,  maxTokens: 128000 },
+        { id: 'paid/gemini-3.1-pro',      name: '[okclawrouter] Gemini 3.1 Pro',     api: 'openai-completions', reasoning: true,  input: ['text'], cost: {input:0.008,output:0.008, cacheRead:0, cacheWrite:0}, contextWindow: 1050000, maxTokens: 65536 }
       ]
     };
     if (!cfg.agents) cfg.agents = {};
     if (!cfg.agents.defaults) cfg.agents.defaults = {};
     if (!cfg.agents.defaults.models) cfg.agents.defaults.models = {};
 
-    cfg.agents.defaults.models['okxclawrouter/openrouter/free'] = { alias: 'OKX Free' };
-    cfg.agents.defaults.models['okxclawrouter/qwen/qwen3-coder:free'] = { alias: 'OKX Qwen3 Coder' };
-    cfg.agents.defaults.models['okxclawrouter/paid/claude-sonnet-4-6'] = { alias: 'OKX Claude Sonnet 4.6' };
-    cfg.agents.defaults.models['okxclawrouter/paid/gpt-5.4'] = { alias: 'OKX GPT-5.4' };
-    cfg.agents.defaults.models['okxclawrouter/paid/gemini-3.1-pro'] = { alias: 'OKX Gemini 3.1 Pro' };
+    for (const key of Object.keys(cfg.agents.defaults.models)) {
+      if (key.startsWith('okxclawrouter/')) {
+        delete cfg.agents.defaults.models[key];
+      }
+    }
+
+    cfg.agents.defaults.models['okclawrouter/openrouter/free'] = { alias: '[okclawrouter] OpenRouter Free' };
+    cfg.agents.defaults.models['okclawrouter/qwen/qwen3-coder:free'] = { alias: '[okclawrouter] Qwen3 Coder' };
+    cfg.agents.defaults.models['okclawrouter/paid/claude-sonnet-4-6'] = { alias: '[okclawrouter] Claude Sonnet 4.6' };
+    cfg.agents.defaults.models['okclawrouter/paid/gpt-5.4'] = { alias: '[okclawrouter] GPT-5.4' };
+    cfg.agents.defaults.models['okclawrouter/paid/gemini-3.1-pro'] = { alias: '[okclawrouter] Gemini 3.1 Pro' };
 
     if (!cfg.meta) cfg.meta = {};
     cfg.meta.lastTouchedAt = new Date().toISOString();
@@ -216,7 +373,7 @@ if [ -f "$OPENCLAW_CONFIG" ]; then
     " 2>&1
   fi
 else
-  warn "未检测到 OpenClaw — 安装后运行 okxclawrouter 再手动接入"
+  warn "未检测到 OpenClaw — 安装后运行 okclawrouter 再手动接入"
 fi
 
 echo ""
@@ -236,7 +393,7 @@ echo -e "  ${BOLD}${FIRE} 免费模型 (即开即用):${RESET}"
 echo -e "    ${FREE} OpenRouter Free  /  Qwen3 Coder"
 echo ""
 echo -e "  ${BOLD}${STAR} 启动代理:${RESET}"
-echo -e "    ${W} okxclawrouter${RESET}"
+echo -e "    ${W} okclawrouter${RESET}"
 echo ""
 
 if [ "$HAS_ONCHAINOS" = true ]; then
@@ -254,16 +411,16 @@ fi
 
 echo ""
 echo -e "  ${BOLD}${BRAIN} OpenClaw 已自动配置，直接用:${RESET}"
-echo -e "    /model okxclawrouter/openrouter/free           ${DIM}(免费)${RESET}"
-echo -e "    /model okxclawrouter/paid/claude-sonnet-4-6   ${DIM}(付费)${RESET}"
+echo -e "    /model okclawrouter/openrouter/free           ${DIM}(免费)${RESET}"
+echo -e "    /model okclawrouter/paid/claude-sonnet-4-6   ${DIM}(付费)${RESET}"
 echo ""
 echo -e "  ${BOLD}${LINK} Cursor / VS Code:${RESET}"
 echo -e "    API Base URL → ${BOLD}http://localhost:8402/v1${RESET}"
 echo ""
 echo -e "  ${BOLD}${LINK} 运维命令:${RESET}"
-echo -e "    ${W}okxclawrouter${RESET}        启动代理（后台运行）"
-echo -e "    ${W}okxclawrouter state${RESET}  查看运行状态"
-echo -e "    ${W}okxclawrouter stop${RESET}   停止代理"
+echo -e "    ${W}okclawrouter${RESET}        启动代理（后台运行）"
+echo -e "    ${W}okclawrouter state${RESET}  查看运行状态"
+echo -e "    ${W}okclawrouter stop${RESET}   停止代理"
 echo ""
 echo -e "  ${BOLD}${LINK} 测试代理:${RESET}"
 echo -e "    ${DIM}curl http://localhost:8402/v1/models${RESET}"

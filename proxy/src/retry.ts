@@ -1,5 +1,5 @@
 /**
- * Retry Logic for OKXClawRouter
+ * Retry Logic for okclawrouter
  *
  * Ported from ClawRouter's production-grade retry system.
  * Provides fetch wrapper with exponential backoff for transient errors.

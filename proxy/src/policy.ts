@@ -6,8 +6,13 @@ import type { TopupConfig } from "./auto-topup.js";
 import { DEFAULT_TOPUP_CONFIG } from "./auto-topup.js";
 import type { SpendLimits } from "./spend-control.js";
 
-// Policy 文件存储路径
-const POLICY_DIR = join(homedir(), ".okxclawrouter");
+// Prefer the renamed directory, but keep reading legacy installs until they migrate.
+const PRIMARY_POLICY_DIR = join(homedir(), ".okclawrouter");
+const LEGACY_POLICY_DIR = join(homedir(), ".okxclawrouter");
+const POLICY_DIR =
+  existsSync(PRIMARY_POLICY_DIR) || !existsSync(LEGACY_POLICY_DIR)
+    ? PRIMARY_POLICY_DIR
+    : LEGACY_POLICY_DIR;
 const POLICY_FILE = join(POLICY_DIR, "policy.json");
 
 export interface SecurityPolicy {

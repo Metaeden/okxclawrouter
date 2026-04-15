@@ -1,6 +1,6 @@
-# OKXClawRouter 后端部署教程
+# okclawrouter 后端部署教程
 
-> 本文档覆盖从零开始将 OKXClawRouter 后端服务部署到云服务器的完整流程。
+> 本文档覆盖从零开始将 okclawrouter 后端服务部署到云服务器的完整流程。
 
 ---
 
@@ -111,8 +111,8 @@ su - deploy
 
 ```bash
 cd ~
-git clone https://github.com/<your-org>/okxclawrouter.git
-cd okxclawrouter/backend
+git clone https://github.com/<your-org>/okxclawrouter.git okclawrouter
+cd okclawrouter/backend
 ```
 
 ---
@@ -135,7 +135,7 @@ su - deploy
 ### 4.2 创建环境变量文件
 
 ```bash
-cd ~/okxclawrouter/backend
+cd ~/okclawrouter/backend
 cp .env.example .env
 ```
 
@@ -172,25 +172,25 @@ chmod 600 .env
 ### 4.3 构建 Docker 镜像
 
 ```bash
-cd ~/okxclawrouter/backend
-docker build -t okxclawrouter-backend .
+cd ~/okclawrouter/backend
+docker build -t okclawrouter-backend .
 ```
 
 构建过程大约 1-2 分钟。成功后会看到：
 
 ```
-Successfully tagged okxclawrouter-backend:latest
+Successfully tagged okclawrouter-backend:latest
 ```
 
 ### 4.4 启动容器
 
 ```bash
 docker run -d \
-  --name okxclawrouter \
+  --name okclawrouter \
   --restart unless-stopped \
   --env-file .env \
   -p 4002:4002 \
-  okxclawrouter-backend
+  okclawrouter-backend
 ```
 
 参数说明：
@@ -206,17 +206,17 @@ docker run -d \
 docker ps
 
 # 查看日志
-docker logs okxclawrouter
+docker logs okclawrouter
 
 # 实时查看日志
-docker logs -f okxclawrouter
+docker logs -f okclawrouter
 ```
 
 正常启动日志：
 
 ```
 x402 resource server initialized (network: eip155:196)
-OKXClawRouter Backend running on :4002
+okclawrouter Backend running on :4002
   Free route:  POST /v1/free/chat/completions
   Paid route:  POST /v1/paid/chat/completions (x402)
   Models:      GET  /v1/models
@@ -227,22 +227,22 @@ OKXClawRouter Backend running on :4002
 
 ```bash
 # 停止
-docker stop okxclawrouter
+docker stop okclawrouter
 
 # 重启
-docker restart okxclawrouter
+docker restart okclawrouter
 
 # 更新代码后重新部署
-cd ~/okxclawrouter && git pull
+cd ~/okclawrouter && git pull
 cd backend
-docker build -t okxclawrouter-backend .
-docker stop okxclawrouter && docker rm okxclawrouter
+docker build -t okclawrouter-backend .
+docker stop okclawrouter && docker rm okclawrouter
 docker run -d \
-  --name okxclawrouter \
+  --name okclawrouter \
   --restart unless-stopped \
   --env-file .env \
   -p 4002:4002 \
-  okxclawrouter-backend
+  okclawrouter-backend
 ```
 
 ---
@@ -266,7 +266,7 @@ npm -v
 ### 5.2 安装依赖并构建
 
 ```bash
-cd ~/okxclawrouter/backend
+cd ~/okclawrouter/backend
 npm ci
 npm run build
 ```
@@ -303,7 +303,7 @@ sudo apt install -y nginx
 ### 6.2 配置反向代理
 
 ```bash
-sudo nano /etc/nginx/sites-available/okxclawrouter
+sudo nano /etc/nginx/sites-available/okclawrouter
 ```
 
 写入：
@@ -341,7 +341,7 @@ server {
 启用配置：
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/okxclawrouter /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/okclawrouter /etc/nginx/sites-enabled/
 sudo nginx -t          # 检查配置语法
 sudo systemctl reload nginx
 ```
@@ -390,16 +390,16 @@ curl https://api.yourdomain.com/health
 sudo npm install -g pm2
 
 # 启动服务
-cd ~/okxclawrouter/backend
+cd ~/okclawrouter/backend
 pm2 start dist/server.js \
-  --name okxclawrouter \
+  --name okclawrouter \
   --env-file .env
 
 # 查看状态
 pm2 status
 
 # 查看日志
-pm2 logs okxclawrouter
+pm2 logs okclawrouter
 
 # 设置开机自启
 pm2 startup
@@ -409,30 +409,30 @@ pm2 save
 PM2 常用命令：
 
 ```bash
-pm2 restart okxclawrouter   # 重启
-pm2 stop okxclawrouter      # 停止
-pm2 delete okxclawrouter    # 删除
+pm2 restart okclawrouter   # 重启
+pm2 stop okclawrouter      # 停止
+pm2 delete okclawrouter    # 删除
 pm2 monit                   # 实时监控面板
 ```
 
 ### 方案 B：systemd
 
 ```bash
-sudo nano /etc/systemd/system/okxclawrouter.service
+sudo nano /etc/systemd/system/okclawrouter.service
 ```
 
 写入：
 
 ```ini
 [Unit]
-Description=OKXClawRouter Backend
+Description=okclawrouter Backend
 After=network.target
 
 [Service]
 Type=simple
 User=deploy
-WorkingDirectory=/home/deploy/okxclawrouter/backend
-EnvironmentFile=/home/deploy/okxclawrouter/backend/.env
+WorkingDirectory=/home/deploy/okclawrouter/backend
+EnvironmentFile=/home/deploy/okclawrouter/backend/.env
 ExecStart=/usr/bin/node dist/server.js
 Restart=on-failure
 RestartSec=5
@@ -447,14 +447,14 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable okxclawrouter
-sudo systemctl start okxclawrouter
+sudo systemctl enable okclawrouter
+sudo systemctl start okclawrouter
 
 # 查看状态
-sudo systemctl status okxclawrouter
+sudo systemctl status okclawrouter
 
 # 查看日志
-sudo journalctl -u okxclawrouter -f
+sudo journalctl -u okclawrouter -f
 ```
 
 ---
@@ -533,16 +533,16 @@ curl -N -X POST https://api.yourdomain.com/v1/free/chat/completions \
 ### 方式一：环境变量
 
 ```bash
-export OKX_ROUTER_BACKEND=https://api.yourdomain.com
-okxclawrouter
+export OKCLAWROUTER_BACKEND=https://api.yourdomain.com
+okclawrouter
 ```
 
 ### 方式二：修改 launch 脚本
 
-编辑 `~/.local/bin/okxclawrouter`，把 `OKX_ROUTER_BACKEND` 改成你的域名：
+编辑 `~/.local/bin/okclawrouter`，把 `OKCLAWROUTER_BACKEND` 改成你的域名：
 
 ```bash
-export OKX_ROUTER_BACKEND="https://api.yourdomain.com"
+export OKCLAWROUTER_BACKEND="https://api.yourdomain.com"
 ```
 
 然后在你的 AI 工具中配置：
@@ -561,13 +561,13 @@ API Base URL: http://localhost:8402/v1
 
 ```bash
 # Docker 方式
-docker logs -f okxclawrouter --tail 100
+docker logs -f okclawrouter --tail 100
 
 # PM2 方式
-pm2 logs okxclawrouter --lines 100
+pm2 logs okclawrouter --lines 100
 
 # systemd 方式
-sudo journalctl -u okxclawrouter -f --no-pager
+sudo journalctl -u okclawrouter -f --no-pager
 ```
 
 每条请求日志格式：
@@ -578,23 +578,23 @@ POST /v1/free/chat/completions 200 1523ms model=free/deepseek-chat
 ### 10.2 更新部署
 
 ```bash
-cd ~/okxclawrouter
+cd ~/okclawrouter
 git pull
 
 # Docker 方式
 cd backend
-docker build -t okxclawrouter-backend .
-docker stop okxclawrouter && docker rm okxclawrouter
-docker run -d --name okxclawrouter --restart unless-stopped \
-  --env-file .env -p 4002:4002 okxclawrouter-backend
+docker build -t okclawrouter-backend .
+docker stop okclawrouter && docker rm okclawrouter
+docker run -d --name okclawrouter --restart unless-stopped \
+  --env-file .env -p 4002:4002 okclawrouter-backend
 
 # PM2 方式
 cd backend && npm ci && npm run build
-pm2 restart okxclawrouter
+pm2 restart okclawrouter
 
 # systemd 方式
 cd backend && npm ci && npm run build
-sudo systemctl restart okxclawrouter
+sudo systemctl restart okclawrouter
 ```
 
 ### 10.3 安全加固
@@ -622,7 +622,7 @@ sudo ufw enable
 #!/bin/bash
 STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:4002/health)
 if [ "$STATUS" != "200" ]; then
-  echo "[$(date)] OKXClawRouter health check FAILED (status=$STATUS)" >> /var/log/okxclawrouter-health.log
+  echo "[$(date)] okclawrouter health check FAILED (status=$STATUS)" >> /var/log/okclawrouter-health.log
   # 可选：发送告警（邮件、Telegram、Slack 等）
 fi
 ```
@@ -676,7 +676,7 @@ proxy_cache off;
 ### Q: Docker 容器反复重启
 
 ```bash
-docker logs okxclawrouter
+docker logs okclawrouter
 ```
 
 看最后几行报错。常见原因：`.env` 变量缺失、端口被占用。
@@ -693,7 +693,7 @@ docker logs okxclawrouter
 
 - [ ] `.env` 文件已创建且权限为 600
 - [ ] 所有 5 个必需环境变量已填写
-- [ ] 服务已启动且日志显示 `OKXClawRouter Backend running on :4002`
+- [ ] 服务已启动且日志显示 `okclawrouter Backend running on :4002`
 - [ ] `GET /health` 返回 200
 - [ ] `GET /v1/models` 返回 6 个模型
 - [ ] `POST /v1/free/chat/completions` 正常返回 AI 回答

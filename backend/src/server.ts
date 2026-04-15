@@ -132,7 +132,7 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 
 // ── Start ──────────────────────────────────────────────────────
 const server = app.listen(PORT, () => {
-  console.log(`OKXClawRouter Backend running on :${PORT}`);
+  console.log(`okclawrouter backend running on :${PORT}`);
   console.log(`  Free route:  POST /v1/free/chat/completions`);
   console.log(`  Paid route:  POST /v1/paid/chat/completions (x402)`);
   console.log(`  Models:      GET  /v1/models`);

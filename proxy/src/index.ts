@@ -81,7 +81,7 @@ app.listen(config.port, () => {
 
     console.log(`
 ═══════════════════════════════════════════════════════
-  OKXClawRouter v0.2.0  (Powered by OKX OnchainOS)
+  okclawrouter v0.2.0  (Powered by OKX OnchainOS)
 ═══════════════════════════════════════════════════════
 
   代理地址:   http://localhost:${config.port}
@@ -107,7 +107,7 @@ ${
 ═══════════════════════════════════════════════════════
 `);
 
-    log.info(`OKXClawRouter proxy listening on :${config.port}`);
+    log.info(`okclawrouter proxy listening on :${config.port}`);
   })().catch((err) => {
     console.error("Failed to load advertised model list:", err);
   });

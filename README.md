@@ -1,4 +1,4 @@
-# OKXClawRouter 🦞
+# okclawrouter 🦞
 
 **AI 智能路由器 + X-Layer 链上微支付**
 
@@ -12,7 +12,7 @@ curl -fsSL https://raw.githubusercontent.com/Metaeden/okxclawrouter/main/install
 
 然后启动：
 ```bash
-okxclawrouter
+okclawrouter
 ```
 
 AI 工具配置 (Cursor / VS Code / 任何 OpenAI 兼容工具)：
@@ -28,16 +28,23 @@ API Base URL: http://localhost:8402/v1
 
 先启动本地代理：
 ```bash
-okxclawrouter
+okclawrouter
 ```
 
 在 OpenClaw 里切换模型：
 ```
-/model okxclawrouter/openrouter/free            # 免费
-/model okxclawrouter/qwen/qwen3-coder:free      # 免费
-/model okxclawrouter/paid/claude-sonnet-4-6     # 付费
-/model okxclawrouter/paid/gpt-5.4               # 付费
-/model okxclawrouter/paid/gemini-3.1-pro        # 付费
+/model okclawrouter/openrouter/free            # 免费
+/model okclawrouter/qwen/qwen3-coder:free      # 免费
+/model okclawrouter/paid/claude-sonnet-4-6     # 付费
+/model okclawrouter/paid/gpt-5.4               # 付费
+/model okclawrouter/paid/gemini-3.1-pro        # 付费
+```
+
+OpenClaw 列表里会显示为：
+```
+[okclawrouter] OpenRouter Free
+[okclawrouter] Qwen3 Coder
+[okclawrouter] Claude Sonnet 4.6
 ```
 
 > 💡 选付费模型时，如果余额不足会自动 fallback 到免费模型，无需手动切换。
@@ -123,8 +130,8 @@ cd proxy && npm test
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `OKX_ROUTER_BACKEND` | `http://130.162.140.123:4002` | 后端地址 (已预配置) |
-| `OKX_ROUTER_PORT` | 8402 | 本地代理端口 |
+| `OKCLAWROUTER_BACKEND` | `http://130.162.140.123:4002` | 后端地址 (已预配置，兼容旧 `OKX_ROUTER_BACKEND`) |
+| `OKCLAWROUTER_PORT` | 8402 | 本地代理端口 (兼容旧 `OKX_ROUTER_PORT`) |
 
 ## License
 

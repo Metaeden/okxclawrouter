@@ -4,7 +4,7 @@ export default defineConfig({
   test: {
     exclude: ["dist/**", "node_modules/**"],
     env: {
-      OKX_ROUTER_BACKEND: "http://localhost:4002",
+      OKCLAWROUTER_BACKEND: "http://localhost:4002",
     },
   },
 });
