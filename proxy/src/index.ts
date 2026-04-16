@@ -99,7 +99,7 @@ ${
     ${paidModels || "(none advertised by backend)"}`
     : `  解锁 Claude / GPT-5.4 / Gemini:
     1. /wallet login <邮箱>   登录 OKX Agentic Wallet
-    2. 充值 USDC（X Layer 网络） → https://web3.okx.com/onchainos
+    2. 充值 USDT（X Layer 网络） → https://web3.okx.com/onchainos
     3. 付费模型自动解锁`
 }
 

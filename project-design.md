@@ -8,7 +8,7 @@
 
 ### 做什么
 
-一个面向 AI Agent 的 LLM 智能路由器。用户装完 OpenClaw 后一条命令安装，免费模型开箱即用，付费模型通过 OKX Agentic Wallet 在 X Layer 上用 USDC 微支付。
+一个面向 AI Agent 的 LLM 智能路由器。用户装完 OpenClaw 后一条命令安装，免费模型开箱即用，付费模型通过 OKX Agentic Wallet 在 X Layer 上用 USDT 微支付。
 
 ### 和 ClawRouter 的核心差异
 
@@ -526,7 +526,7 @@ install.sh 做三件事：
       只需 3 步：
 
       1. 登录钱包:  /wallet login
-      2. 充值 USDC:  前往 X Layer 网络充值
+      2. 充值 USDT:  前往 X Layer 网络充值
          → https://web3.okx.com/onchainos
       3. 开始使用:   付费模型会自动按请求扣费
 
@@ -554,10 +554,10 @@ install.sh 做三件事：
 ✅  登录成功！
 
 钱包地址: 0x1234...abcd
-X Layer USDC 余额: $0.00
+X Layer USDT 余额: $0.00
 
 💡  充值提示：
-    前往 https://web3.okx.com/onchainos 给这个地址充值 USDC
+    前往 https://web3.okx.com/onchainos 给这个地址充值 USDT
     网络选择: X Layer (Chain ID: 196)
     充 $1 大约可以调用 ~100 次 Claude Sonnet 4
 ```
@@ -573,7 +573,7 @@ X Layer USDC 余额: $0.00
 ### 余额不足提示
 
 ```
-⚠️  USDC 余额不足，已自动切换到免费模型 (Gemini 2.5 Flash)
+⚠️  USDT 余额不足，已自动切换到免费模型 (Gemini 2.5 Flash)
     当前余额: $0.002 | 本次请求需要: $0.01
 
     充值: https://web3.okx.com/onchainos

@@ -545,7 +545,7 @@ if [ -f "$OPENCLAW_CONFIG" ]; then
 
   ok "OpenClaw 已配置完成"
 
-  # Show wallet address and X Layer USDC balance if onchainos is installed
+  # Show wallet address and X Layer USDT balance if onchainos is installed
   if [ "$HAS_ONCHAINOS" = true ]; then
     node -e "
       const { execSync } = require('child_process');
@@ -553,15 +553,22 @@ if [ -f "$OPENCLAW_CONFIG" ]; then
         const addrData = JSON.parse(execSync('onchainos wallet addresses', { encoding: 'utf8', stdio: 'pipe' }));
         const balData = JSON.parse(execSync('onchainos wallet balance', { encoding: 'utf8', stdio: 'pipe' }));
         const xlAddr = addrData?.data?.xlayer?.[0]?.address || addrData?.data?.evmAddress;
-        // Find USDC on X Layer (chainIndex 196)
-        const usdcAsset = balData?.data?.details?.[0]?.tokenAssets?.find(t => t.chainIndex === '196');
-        const usdcBalance = usdcAsset?.balance || '0';
-        const usdcSymbol = usdcAsset?.symbol || 'USDC';
+        const xLayerAssets = (balData?.data?.details || []).flatMap(d => d?.tokenAssets || []);
+        // Find X Layer USDT (chainIndex 196)
+        const usdtAsset = xLayerAssets.find(t =>
+          t.chainIndex === '196' &&
+          (
+            String(t.symbol || t.tokenSymbol || '').toUpperCase() === 'USDT' ||
+            String(t.tokenContractAddress || t.contractAddress || t.address || '').toLowerCase() === '0x779ded0c9e1022225f8e0630b35a9b54be713736'
+          )
+        );
+        const usdtBalance = usdtAsset?.balance || '0';
+        const usdtSymbol = usdtAsset?.symbol || 'USDT';
         if (xlAddr) {
           console.log('');
           console.log('  💰 Wallet address: ' + xlAddr);
-          if (usdcBalance !== '0') {
-            console.log('  💰 X Layer USDC: ' + usdcBalance + ' ' + usdcSymbol);
+          if (usdtBalance !== '0') {
+            console.log('  💰 X Layer USDT: ' + usdtBalance + ' ' + usdtSymbol);
           }
         }
       } catch(e) {}
@@ -593,12 +600,17 @@ echo ""
 
 echo -e "  ${BOLD}${PAID} 付费模型 (Claude / GPT-5.4 / Gemini Pro):${RESET}"
 echo -e "    1. 登录钱包:  /wallet login <你的邮箱>"
-echo -e "    2. 充值 USDC: 发送到 X Layer 钱包"
+echo -e "    2. 充值 USDT: 发送到 X Layer 钱包"
 echo -e "       ${LINK} https://web3.okx.com/onchainos"
 echo -e "    3. 自动使用:  连接钱包后付费模型自动生效"
 echo -e "    ${DIM}install.sh 已强制安装/升级最新 onchainos${RESET}"
 echo -e "    ${DIM}默认支付方式: aggr_deferred 批量支付，无需手动切换${RESET}"
-echo -e "    ${DIM}约 \$1 USDC ≈ 100 次 Claude Sonnet 请求${RESET}"
+echo -e "    ${DIM}约 \$1 USDT ≈ 100 次 Claude Sonnet 请求${RESET}"
+else
+echo -e "  ${BOLD}${PAID} 想用付费模型？${RESET}"
+echo -e "    npm install -g onchainos"
+echo -e "    然后重新运行: curl -fsSL ${REPO_URL}/raw/main/install.sh | bash"
+fi
 
 echo ""
 echo -e "  ${BOLD}${BRAIN} OpenClaw 已自动配置，直接用:${RESET}"

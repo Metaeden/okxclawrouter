@@ -12,7 +12,7 @@
 
 okclawrouter is an AI Agent-oriented LLM smart router. Based on the ClawRouter open-source project, it replaces the payment pipeline with **OKX Agentic Wallet + X Layer x402**, and the backend model service connects to the **OpenRouter API**.
 
-Users install it with a single command after having OpenClaw. Free models work out of the box; paid models use USDC micropayments on X Layer via OKX Agentic Wallet.
+Users install it with a single command after having OpenClaw. Free models work out of the box; paid models use USDT micropayments on X Layer via OKX Agentic Wallet.
 
 ### 1.2 Core Value Proposition
 
@@ -244,7 +244,7 @@ When payment fails due to low balance:
 
 **Warning message format:**
 ```
-USDC balance insufficient. Switched to free model automatically.
+USDT balance insufficient. Switched to free model automatically.
 Recharge at https://web3.okx.com/onchainos (X Layer network)
 ```
 
@@ -277,7 +277,7 @@ The install script:
 
   Want Claude Sonnet 4.6, GPT-5.4, Gemini 3.1 Pro?
     1. Login wallet:  /wallet login <your-email>
-    2. Fund wallet:   Send USDC on X Layer network
+    2. Fund wallet:   Send USDT on X Layer network
        -> https://web3.okx.com/onchainos
     3. Start using:   Paid models auto-selected when wallet connected
 ═══════════════════════════════════════════════════════
@@ -362,7 +362,7 @@ okclawrouter/
 | 3 | Fixed pricing vs actual cost mismatch | Loss on long-context requests | Medium | V1 uses conservative pricing ($0.01); collect cost data for V2 dynamic pricing |
 | 4 | OpenRouter API key leaked | Financial loss | Low | Env-var only, never in code; set spend limit; rotate regularly |
 | 5 | User doesn't install onchainos | Can't use paid models | Medium | install.sh auto-checks; clear prompts; free models always available |
-| 6 | USDC balance insufficient mid-session | UX disruption | Medium | Auto-fallback to free with warning message; no hard failure |
+| 6 | USDT balance insufficient mid-session | UX disruption | Medium | Auto-fallback to free with warning message; no hard failure |
 | 7 | Network disconnection | Requests fail | Low | Retry with backoff; clear error messages |
 
 ---

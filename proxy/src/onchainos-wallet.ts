@@ -1,6 +1,7 @@
 import { execSync, execFileSync } from "child_process";
 import { log } from "./logger.js";
 import { getOnchainosBin } from "./onchainos-bin.js";
+import { isXLayerUsdtAsset } from "./payment-token.js";
 
 export interface WalletStatus {
   loggedIn: boolean;
@@ -19,7 +20,7 @@ export interface ChainBalance {
 
 export interface WalletPortfolio {
   totalUsdValue?: string;
-  xlayerUsdc?: string;        // X-Layer USDC 余额（支付用）
+  xlayerUsdt?: string;        // X-Layer USDT 余额（支付用）
   allChainBalances: ChainBalance[];
 }
 
@@ -68,26 +69,27 @@ export function checkWalletStatus(): WalletStatus {
 }
 
 /**
- * 获取 X-Layer USDC 余额（支付用）。
+ * 获取 X-Layer USDT 余额（支付用）。
  * chainIndex "196" = X-Layer。
  */
-export function getXLayerUsdcBalance(): string | undefined {
+export function getXLayerUsdtBalance(): string | undefined {
   try {
     const output = execFileSync(getOnchainosBin(), ["wallet", "balance"], {
       encoding: "utf-8",
       stdio: "pipe",
     });
     const data = JSON.parse(output);
-    const assets = data?.data?.details?.[0]?.tokenAssets || [];
-    const usdc = assets.find((t: any) => t.chainIndex === "196");
-    return usdc?.balance;
+    const details: any[] = data?.data?.details || [];
+    const assets = details.flatMap((detail) => detail?.tokenAssets || []);
+    const usdt = assets.find(isXLayerUsdtAsset);
+    return usdt?.balance;
   } catch {
     return undefined;
   }
 }
 
 /**
- * 获取完整多链 portfolio，包含所有链上的 USDC 和主流代币余额。
+ * 获取完整多链 portfolio，包含所有链上的 USDT 和主流代币余额。
  * 利用 onchainos wallet balance 返回的 details 数组。
  */
 export function getWalletPortfolio(): WalletPortfolio {
@@ -102,7 +104,7 @@ export function getWalletPortfolio(): WalletPortfolio {
     const totalUsdValue: string | undefined = data?.data?.totalUsdValue;
 
     const allChainBalances: ChainBalance[] = [];
-    let xlayerUsdc: string | undefined;
+    let xlayerUsdt: string | undefined;
 
     for (const detail of details) {
       const tokenAssets: any[] = detail?.tokenAssets || [];
@@ -120,14 +122,14 @@ export function getWalletPortfolio(): WalletPortfolio {
           usdValue: asset.usdValue,
         });
 
-        // 记录 X-Layer USDC（支付用）
-        if (chainIdx === "196" && symbol.toUpperCase() === "USDC") {
-          xlayerUsdc = balance;
+        // 记录 X-Layer USDT（支付用）
+        if (isXLayerUsdtAsset(asset)) {
+          xlayerUsdt = balance;
         }
       }
     }
 
-    return { totalUsdValue, xlayerUsdc, allChainBalances };
+    return { totalUsdValue, xlayerUsdt, allChainBalances };
   } catch (err) {
     log.warn("获取 portfolio 失败:", err);
     return { allChainBalances: [] };
@@ -142,8 +144,8 @@ export function formatPortfolio(portfolio: WalletPortfolio): string {
   if (portfolio.totalUsdValue) {
     lines.push(`总资产: $${portfolio.totalUsdValue}`);
   }
-  if (portfolio.xlayerUsdc) {
-    lines.push(`X-Layer USDC（支付余额）: ${portfolio.xlayerUsdc}`);
+  if (portfolio.xlayerUsdt) {
+    lines.push(`X-Layer USDT（支付余额）: ${portfolio.xlayerUsdt}`);
   }
   lines.push("");
   lines.push("多链余额明细:");

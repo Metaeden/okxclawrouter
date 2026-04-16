@@ -3,7 +3,7 @@
  *
  * Ported from ClawRouter's production-grade spend control.
  * Enforces multi-tier spending limits (per-request, hourly, daily, session)
- * to prevent USDC budget overruns on paid models.
+ * to prevent USDT budget overruns on paid models.
  *
  * Features:
  * - Rolling window limits (hourly, daily)

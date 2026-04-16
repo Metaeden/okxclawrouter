@@ -1,0 +1,3 @@
+export const XLAYER_NETWORK = "eip155:196";
+export const XLAYER_USDT_ADDRESS = "0x779ded0c9e1022225f8e0630b35a9b54be713736";
+export const XLAYER_USDT_DECIMALS = 6;

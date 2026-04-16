@@ -37,7 +37,7 @@ export class InsufficientBalanceError extends Error {
     public readonly required?: string,
     public readonly available?: string,
   ) {
-    super("USDC 余额不足，无法完成支付");
+    super("USDT 余额不足，无法完成支付");
     this.name = "InsufficientBalanceError";
   }
 }

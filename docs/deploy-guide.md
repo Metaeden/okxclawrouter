@@ -30,7 +30,7 @@
 | 域名（可选但推荐） | 用于 HTTPS，如 `api.yourdomain.com` |
 | OKX 开发者账号 | 获取 Facilitator API 密钥 |
 | OpenRouter 账号 | 获取 API Key |
-| 一个 X Layer 钱包地址 | 接收 USDC 付款的收款地址 |
+| 一个 X Layer 钱包地址 | 接收 USDT 付款的收款地址 |
 
 ### 服务器最低要求
 
@@ -69,7 +69,7 @@ OPENROUTER_API_KEY=sk-or-v1-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 ### 2.3 收款钱包地址
 
-你需要一个 X Layer 网络（Chain ID: 196）上的钱包地址来接收用户的 USDC 付款。
+你需要一个 X Layer 网络（Chain ID: 196）上的钱包地址来接收用户的 USDT 付款。
 
 ```
 PAY_TO_ADDRESS=0xYourWalletAddressHere

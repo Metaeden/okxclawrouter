@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import config from "./config.js";
 import { filterSupportedModels } from "./backend-models.js";
 import { route } from "./router/simple-router.js";
-import { checkWalletStatus, getXLayerUsdcBalance } from "./onchainos-wallet.js";
+import { checkWalletStatus, getXLayerUsdtBalance } from "./onchainos-wallet.js";
 import {
   handleX402Payment,
   InsufficientBalanceError,
@@ -301,7 +301,7 @@ export async function handleChatCompletion(
             }
           } catch (payErr) {
             if (payErr instanceof InsufficientBalanceError) {
-              log.warn("USDC 余额不足，尝试自动补仓...");
+              log.warn("USDT 余额不足，尝试自动补仓...");
               const policy = loadPolicy();
 
               // 尝试 auto-topup（如 policy 开启）
@@ -313,7 +313,7 @@ export async function handleChatCompletion(
                     policy.autoTopup,
                   );
                   if (topupResult.success) {
-                    log.info(`自动补仓成功: $${topupResult.amountUsd} USDC，重试付费模型`);
+                    log.info(`自动补仓成功: $${topupResult.amountUsd} USDT，重试付费模型`);
                     // 补仓后重试当前模型（重新加入队列头部）
                     modelsToTry.splice(i, 0, model);
                     continue;
@@ -324,7 +324,7 @@ export async function handleChatCompletion(
 
               balanceWarningEmitted = true;
               const walletStatus = checkWalletStatus();
-              const currentBalance = getXLayerUsdcBalance();
+              const currentBalance = getXLayerUsdtBalance();
               balanceWarningDetail = buildTopupWarning(
                 currentBalance,
                 walletStatus.address,
@@ -498,11 +498,11 @@ export async function handleChatCompletion(
               streamHeartbeat = undefined;
             }
             if (payErr instanceof InsufficientBalanceError) {
-              log.warn("USDC 余额不足（流式），直接返回充值提示");
+              log.warn("USDT 余额不足（流式），直接返回充值提示");
               balanceWarningEmitted = true;
               const walletStatus = checkWalletStatus();
               balanceWarningDetail = buildTopupWarning(
-                getXLayerUsdcBalance(),
+                getXLayerUsdtBalance(),
                 walletStatus.address,
               ) as any;
               sendInsufficientBalanceResponse(
@@ -697,7 +697,7 @@ function buildInsufficientBalanceText(
 ): string {
   const rechargeAddress = detail.rechargeAddress || DEFAULT_RECHARGE_ADDRESS;
   const network = detail.network || "X Layer";
-  const asset = detail.asset || "USDC";
+  const asset = detail.asset || "USDT";
   const lines = [
     "【您的钱包余额不足，请充值】",
     `使用 okclawrouter 付费模型，需要先充值 ${asset}。`,
@@ -874,10 +874,10 @@ function buildBalanceWarningSSE(
   walletAddress?: string,
 ): string {
   return [
-    `: [OKX Router] USDC 余额不足 — 已切换至免费模型: ${fallbackModel}`,
+    `: [OKX Router] USDT 余额不足 — 已切换至免费模型: ${fallbackModel}`,
     walletAddress
-      ? `: [OKX Router] 请通过 OKX Wallet 或 OKX App 向该地址充值 X Layer USDC: ${walletAddress}`
-      : `: [OKX Router] 请通过 OKX Wallet 或 OKX App 充值 X Layer USDC`,
+      ? `: [OKX Router] 请通过 OKX Wallet 或 OKX App 向该地址充值 X Layer USDT: ${walletAddress}`
+      : `: [OKX Router] 请通过 OKX Wallet 或 OKX App 充值 X Layer USDT`,
     `: [OKX Router] 开启自动补仓: /policy autoTopup.enabled=true`,
     "",
   ].join("\n");

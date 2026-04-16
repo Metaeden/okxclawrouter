@@ -197,7 +197,7 @@ describe("handleX402Payment", () => {
       payTo: "0xto",
       amount: "10000",
       extra: {
-        name: "USDC",
+        name: "USDT",
         version: "2",
       },
     };
@@ -238,7 +238,7 @@ describe("handleX402Payment", () => {
     expect(decoded.accepted).toEqual({
       ...accepted,
       extra: {
-        name: "USDC",
+        name: "USDT",
         version: "2",
         sessionCert: "session-cert-123",
       },

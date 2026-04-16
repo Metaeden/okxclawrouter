@@ -2,7 +2,7 @@ import config from "./config.js";
 import {
   isOnchainosInstalled,
   checkWalletStatus,
-  getXLayerUsdcBalance,
+  getXLayerUsdtBalance,
   getWalletPortfolio,
   formatPortfolio,
   walletLogin,
@@ -76,14 +76,14 @@ function handleWallet(sub: string | undefined, arg?: string): string {
         "  /wallet login <邮箱>",
       ].join("\n");
     }
-    const usdcBalance = getXLayerUsdcBalance();
+    const usdtBalance = getXLayerUsdtBalance();
     return [
       `钱包: 已连接`,
       `邮箱: ${status.email}`,
       `X-Layer 地址: ${status.address}`,
-      usdcBalance !== undefined ? `X-Layer USDC 余额: ${usdcBalance}` : "",
+      usdtBalance !== undefined ? `X-Layer USDT 余额: ${usdtBalance}` : "",
       "",
-      `在 X Layer 网络充值 USDC 以解锁付费模型:`,
+      `在 X Layer 网络充值 USDT 以解锁付费模型:`,
       `  https://web3.okx.com/onchainos`,
     ]
       .filter(Boolean)
@@ -206,7 +206,7 @@ async function handleModels(): Promise<string> {
     lines.push(`  ${m.id}`);
   }
   lines.push("");
-  lines.push("PAID (requires wallet + USDC on X Layer):");
+  lines.push("PAID (requires wallet + USDT on X Layer):");
   for (const m of paid) {
     lines.push(`  ${m.id}`);
   }
@@ -296,7 +296,7 @@ function handleTopup(sub: string | undefined): string {
     return [
       `换币报价 (X-Layer):`,
       `  换出: ${quote.fromAmount} OKB（原生）`,
-      `  换入: 约 $${policy.autoTopup.maxTopupUsd} USDC`,
+      `  换入: 约 $${policy.autoTopup.maxTopupUsd} USDT`,
       `  链: ${quote.chain}`,
       "",
       `执行: /policy set autoTopup.enabled=true 后，余额不足时自动触发`,
@@ -332,11 +332,11 @@ function handleHelp(): string {
     "  /security                    查看安全状态总览",
     "",
     "  /topup                       查看自动补仓状态",
-    "  /topup quote                 查询 OKB→USDC 换币报价",
+    "  /topup quote                 查询 OKB→USDT 换币报价",
     "",
     "  /stats                       查看请求统计 + 缓存 + 冷却",
     "  /stats clear                 重置统计",
-    "  /spend status                查看 USDC 支出摘要",
+    "  /spend status                查看 USDT 支出摘要",
     "  /spend limit key=val         设置支出限额",
     "  /models                      列出可用模型",
     "  /tier [free|paid|auto]       设置模型层级偏好",

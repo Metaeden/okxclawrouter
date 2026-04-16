@@ -10,8 +10,8 @@ describe("buildTopupWarning", () => {
         type: "insufficient_balance",
         rechargeAddress: "0xabc123",
         network: "X Layer",
-        asset: "USDC",
-        action: "向该地址充值 USDC（X Layer）: 0xabc123",
+        asset: "USDT",
+        action: "请通过 OKX Wallet 或 OKX App 向这个地址充值 USDT（X Layer）: 0xabc123",
       }),
     );
   });
@@ -22,8 +22,9 @@ describe("buildTopupWarning", () => {
     expect(warning).toEqual(
       expect.objectContaining({
         type: "insufficient_balance",
-        rechargeAddress: undefined,
-        action: "前往 https://web3.okx.com/onchainos 充值 USDC（X Layer 网络）",
+        rechargeAddress: "0x3e08a5ee55ef0eeaccfd3cd34a4f10c981ca6b55",
+        asset: "USDT",
+        action: "请通过 OKX Wallet 或 OKX App 向这个地址充值 USDT（X Layer）: 0x3e08a5ee55ef0eeaccfd3cd34a4f10c981ca6b55",
       }),
     );
   });

@@ -1,20 +1,17 @@
 import { execFileSync } from "child_process";
 import { log } from "./logger.js";
 import { getOnchainosBin } from "./onchainos-bin.js";
+import { XLAYER_USDT_ADDRESS, XLAYER_USDT_DECIMALS } from "./payment-token.js";
 
-// X-Layer 上 USDC 合约地址
-const XLAYER_USDC = "0x74b7f16337b8972027f6196a17a631ac6de26d22";
 // X-Layer 原生 OKB（native token）
 const XLAYER_NATIVE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
-// USDC 精度 6 位
-const USDC_DECIMALS = 6;
 
 export interface TopupConfig {
   /** 是否启用自动换币补仓 */
   enabled: boolean;
-  /** USDC 余额低于此阈值时触发（美元单位） */
+  /** USDT 余额低于此阈值时触发（美元单位） */
   triggerBelowUsd: number;
-  /** 单次最大换入 USDC 金额（美元单位） */
+  /** 单次最大换入 USDT 金额（美元单位） */
   maxTopupUsd: number;
   /** 换出来源：native = OKB，usdt = USDT on XLayer */
   fromToken: "native" | "usdt";
@@ -37,19 +34,19 @@ export interface TopupResult {
 
 /**
  * 获取换币报价（只查不执行）。
- * 返回: 能换到多少 USDC（美元值），以及所需 OKB 数量。
+ * 返回: 能换到多少 USDT（美元值），以及所需 OKB 数量。
  */
 export function getTopupQuote(
   walletAddress: string,
   targetUsd: number,
 ): { feasible: boolean; fromAmount?: string; toAmount?: string; chain: string } {
   try {
-    const toAmount = BigInt(Math.round(targetUsd * 10 ** USDC_DECIMALS)).toString();
+    const toAmount = BigInt(Math.round(targetUsd * 10 ** XLAYER_USDT_DECIMALS)).toString();
 
     const args = [
       "swap", "quote",
       "--from", XLAYER_NATIVE,
-      "--to", XLAYER_USDC,
+      "--to", XLAYER_USDT_ADDRESS,
       "--amount", toAmount,
       "--chain", "xlayer",
     ];
@@ -81,7 +78,7 @@ export function getTopupQuote(
 }
 
 /**
- * 执行自动补仓：将 OKB 换成 USDC。
+ * 执行自动补仓：将 OKB 换成 USDT。
  * 使用 onchainos agentic wallet 会话直接执行，无需手动签名。
  *
  * 注意：仅当 policy.autoTopup.enabled = true 时调用。
@@ -95,14 +92,14 @@ export async function executeAutoTopup(
   }
 
   const targetUsd = config.maxTopupUsd;
-  const toAmount = BigInt(Math.round(targetUsd * 10 ** USDC_DECIMALS)).toString();
+  const toAmount = BigInt(Math.round(targetUsd * 10 ** XLAYER_USDT_DECIMALS)).toString();
 
   try {
     // Step 1: 获取 swap 数据
     const swapArgs = [
       "swap", "swap",
       "--from", XLAYER_NATIVE,
-      "--to", XLAYER_USDC,
+      "--to", XLAYER_USDT_ADDRESS,
       "--amount", toAmount,
       "--chain", "xlayer",
       "--wallet", walletAddress,
@@ -145,7 +142,7 @@ export async function executeAutoTopup(
       return { success: false, error: "广播成功但未返回 txHash" };
     }
 
-    log.info(`自动补仓成功: 换入约 $${targetUsd} USDC，txHash=${txHash}`);
+    log.info(`自动补仓成功: 换入约 $${targetUsd} USDT，txHash=${txHash}`);
     return {
       success: true,
       txHash,
@@ -169,7 +166,7 @@ export function buildTopupWarning(
   if (topupResult?.success) {
     return {
       type: "auto_topup_success",
-      message: `自动补仓成功：换入约 $${topupResult.amountUsd} USDC`,
+      message: `自动补仓成功：换入约 $${topupResult.amountUsd} USDT`,
       txHash: topupResult.txHash,
     };
   }
@@ -179,10 +176,10 @@ export function buildTopupWarning(
     message: "【您的钱包余额不足，请充值】",
     rechargeAddress: walletAddress || DEFAULT_RECHARGE_ADDRESS,
     network: "X Layer",
-    asset: "USDC",
+    asset: "USDT",
     action: walletAddress
-      ? `请通过 OKX Wallet 或 OKX App 向这个地址充值 USDC（X Layer）: ${walletAddress}`
-      : `请通过 OKX Wallet 或 OKX App 向这个地址充值 USDC（X Layer）: ${DEFAULT_RECHARGE_ADDRESS}`,
+      ? `请通过 OKX Wallet 或 OKX App 向这个地址充值 USDT（X Layer）: ${walletAddress}`
+      : `请通过 OKX Wallet 或 OKX App 向这个地址充值 USDT（X Layer）: ${DEFAULT_RECHARGE_ADDRESS}`,
     topupHint: "设置 /policy topup.enabled=true 可开启自动换币补仓",
   };
 }

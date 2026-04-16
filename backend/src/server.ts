@@ -4,7 +4,7 @@ import { paymentMiddleware } from "@okxweb3/x402-express";
 import { createResourceServer, NETWORK, getConfiguredPaymentScheme } from "./payment.js";
 import { proxyToOpenRouter } from "./openrouter-proxy.js";
 import { MODEL_LIST } from "./models.js";
-import { getPrice } from "./pricing.js";
+import { getAssetPrice } from "./pricing.js";
 
 // ── Env validation ────────────────────────────────────────────
 const REQUIRED_ENV = [
@@ -93,16 +93,6 @@ app.post("/v1/free/chat/completions", (req: Request, res: Response) => {
 // ── Paid route — x402 payment wall ────────────────────────────
 const resourceServer = createResourceServer();
 
-// Dynamic pricing middleware: read model from body, set x402 price accordingly
-app.use("/v1/paid", (req: Request, _res: Response, next: NextFunction) => {
-  const model = req.body?.model;
-  if (model) {
-    // Store the per-model price for the payment middleware to pick up
-    (req as any).__x402Price = getPrice(model);
-  }
-  next();
-});
-
 app.use(
   paymentMiddleware(
     {
@@ -112,10 +102,13 @@ app.use(
             scheme: PAYMENT_SCHEME,
             network: NETWORK,
             payTo: PAY_TO,
-            price: getPrice("paid/claude-sonnet-4-6"), // default, overridden per-request in V2
+            price: ({ adapter }) => {
+              const body = adapter.getBody?.() as { model?: string } | undefined;
+              return getAssetPrice(body?.model ?? "paid/claude-sonnet-4-6");
+            },
           },
         ],
-        description: "LLM Chat Completion (Paid Model)",
+        description: "LLM Chat Completion (Paid Model, billed in USDT)",
         mimeType: "application/json",
       },
     },

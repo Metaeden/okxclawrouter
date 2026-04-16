@@ -2,7 +2,7 @@
 
 **AI 智能路由器 + X-Layer 链上微支付**
 
-免费模型即开即用，付费模型默认走批量支付 (USDC on X-Layer)
+免费模型即开即用，付费模型按次付费 (USDT on X-Layer)
 
 ## 🚀 一键安装
 
@@ -66,12 +66,12 @@ API Base URL → http://localhost:8402/v1
 
 1. 运行一键安装脚本，它会在本机强制安装/升级最新 `onchainos`
 2. 登录: `/wallet login <你的邮箱>`
-3. 充值: 发送 USDC 到 X-Layer 钱包 → https://web3.okx.com/onchainos
+3. 充值: 发送 USDT 到 X-Layer 钱包 → https://web3.okx.com/onchainos
 4. 使用: 连接钱包后付费模型自动生效
 
 > `onchainos` 只需要安装在运行本地 `proxy` 的机器上，不需要安装在云端 `backend` 服务器上。
 
-> 约 $1 USDC ≈ 100 次 Claude Sonnet 请求
+> 约 $1 USDT ≈ 100 次 Claude Sonnet 请求
 
 ## ⚙️ 命令
 
