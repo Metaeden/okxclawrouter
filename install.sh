@@ -7,6 +7,8 @@ B='\033[0;34m'     P='\033[0;35m'     C='\033[0;36m'
 W='\033[1;37m'     DIM='\033[2m'     BOLD='\033[1m'
 RESET='\033[0m'
 
+export PATH="${HOME}/.local/bin:${PATH}"
+
 # ── Emoji helpers ─────────────────────────────────────────────
 LOVE="🦞"   ROCKET="🚀"   CHECK="✅"   FAIL="❌"
 GEAR="⚙️"    PACK="📦"     LINK="🔗"    FREE="🆓"
@@ -42,6 +44,107 @@ ok()   { echo -e "    ${CHECK} ${G}${1}${RESET}"; }
 warn() { echo -e "    ${Y}${1}${RESET}"; }
 fail() { echo -e "    ${FAIL} ${R}${1}${RESET}"; }
 
+detect_onchainos_target() {
+  local os arch
+  os="$(uname -s)"
+  arch="$(uname -m)"
+
+  case "$os" in
+    Darwin)
+      case "$arch" in
+        arm64|aarch64) echo "aarch64-apple-darwin" ;;
+        x86_64) echo "x86_64-apple-darwin" ;;
+        *)
+          fail "暂不支持的 macOS 架构: ${arch}"
+          exit 1
+          ;;
+      esac
+      ;;
+    Linux)
+      case "$arch" in
+        x86_64) echo "x86_64-unknown-linux-gnu" ;;
+        aarch64|arm64) echo "aarch64-unknown-linux-gnu" ;;
+        armv7l|armv7) echo "armv7-unknown-linux-gnueabihf" ;;
+        i686|i386) echo "i686-unknown-linux-gnu" ;;
+        *)
+          fail "暂不支持的 Linux 架构: ${arch}"
+          exit 1
+          ;;
+      esac
+      ;;
+    *)
+      fail "暂不支持的操作系统: ${os}"
+      exit 1
+      ;;
+  esac
+}
+
+sha256_file() {
+  local file="$1"
+  if check_command shasum; then
+    shasum -a 256 "$file" | awk '{print $1}'
+  elif check_command sha256sum; then
+    sha256sum "$file" | awk '{print $1}'
+  elif check_command openssl; then
+    openssl dgst -sha256 "$file" | awk '{print $NF}'
+  else
+    fail "未找到 SHA-256 校验工具 (shasum / sha256sum / openssl)"
+    exit 1
+  fi
+}
+
+install_or_upgrade_onchainos_latest() {
+  local repo latest_url latest_tag target asset download_base tmp_dir current_ver expected_sha actual_sha install_bin
+  repo="okx/onchainos-skills"
+  install_bin="${HOME}/.local/bin/onchainos"
+
+  mkdir -p "$(dirname "$install_bin")"
+
+  if check_command onchainos; then
+    current_ver="$(onchainos --version 2>/dev/null || true)"
+    warn "检测到 ${current_ver:-onchainos}，准备强制升级到最新版本..."
+  else
+    warn "未检测到 onchainos，准备安装最新版本..."
+  fi
+
+  target="$(detect_onchainos_target)"
+  asset="onchainos-${target}"
+
+  latest_url="$(curl -fsSL -A 'Mozilla/5.0' -o /dev/null -w '%{url_effective}' "https://github.com/${repo}/releases/latest")"
+  latest_tag="$(printf '%s' "$latest_url" | sed -E 's#.*/tag/([^/?]+).*#\1#')"
+  if [ -z "$latest_tag" ] || [ "$latest_tag" = "$latest_url" ]; then
+    fail "无法解析 onchainos 最新版本号"
+    exit 1
+  fi
+
+  download_base="https://github.com/${repo}/releases/download/${latest_tag}"
+  tmp_dir="$(mktemp -d)"
+  trap 'rm -rf "$tmp_dir"' RETURN
+
+  echo -e "    ${DIM}下载 onchainos ${latest_tag} (${asset})...${RESET}"
+  curl -fsSL -A 'Mozilla/5.0' "${download_base}/checksums.txt" -o "${tmp_dir}/checksums.txt"
+  curl -fsSL -A 'Mozilla/5.0' "${download_base}/${asset}" -o "${tmp_dir}/${asset}"
+
+  expected_sha="$(awk -v name="$asset" '$2 == name { print $1 }' "${tmp_dir}/checksums.txt" | head -n1)"
+  if [ -z "$expected_sha" ]; then
+    fail "checksums.txt 中未找到 ${asset} 的校验值"
+    exit 1
+  fi
+
+  actual_sha="$(sha256_file "${tmp_dir}/${asset}")"
+  if [ "$expected_sha" != "$actual_sha" ]; then
+    fail "onchainos 校验失败，已停止安装"
+    echo -e "    ${DIM}expected: ${expected_sha}${RESET}"
+    echo -e "    ${DIM}actual:   ${actual_sha}${RESET}"
+    exit 1
+  fi
+
+  install -m 0755 "${tmp_dir}/${asset}" "$install_bin"
+  ONCHAINOS_VER="$("$install_bin" --version 2>/dev/null || echo "${latest_tag}")"
+  HAS_ONCHAINOS=true
+  ok "${ONCHAINOS_VER} ${PAID} 已安装并升级到最新版本"
+}
+
 step "Step 1/3 — 检查环境" "${GEAR}"
 echo ""
 
@@ -70,16 +173,16 @@ else
   exit 1
 fi
 
-# onchainos (optional)
-if check_command onchainos; then
-  ONCHAINOS_VER=$(onchainos --version 2>/dev/null || echo "?")
-  ok "${ONCHAINOS_VER} ${PAID} 付费模型可用"
-  HAS_ONCHAINOS=true
+# curl
+if check_command curl; then
+  ok "curl $(curl --version | head -n1 | awk '{print $2}')"
 else
-  warn "onchainos 未安装 — 仅免费模型可用"
-  echo -e "    ${DIM}如需付费模型，请在当前这台客户端机器安装 OKX Onchain OS / Agentic Wallet 环境${RESET}"
-  HAS_ONCHAINOS=false
+  fail "未安装 curl"
+  exit 1
 fi
+
+# onchainos (mandatory and always updated)
+install_or_upgrade_onchainos_latest
 
 echo ""
 
@@ -488,21 +591,14 @@ echo -e "  ${BOLD}${STAR} 启动代理:${RESET}"
 echo -e "    ${W} okclawrouter${RESET}"
 echo ""
 
-if [ "$HAS_ONCHAINOS" = true ]; then
-echo -e "  ${BOLD}${PAID} 解锁付费模型 (Claude / GPT-5.4 / Gemini Pro):${RESET}"
+echo -e "  ${BOLD}${PAID} 付费模型 (Claude / GPT-5.4 / Gemini Pro):${RESET}"
 echo -e "    1. 登录钱包:  /wallet login <你的邮箱>"
 echo -e "    2. 充值 USDC: 发送到 X Layer 钱包"
 echo -e "       ${LINK} https://web3.okx.com/onchainos"
 echo -e "    3. 自动使用:  连接钱包后付费模型自动生效"
+echo -e "    ${DIM}install.sh 已强制安装/升级最新 onchainos${RESET}"
 echo -e "    ${DIM}默认支付方式: aggr_deferred 批量支付，无需手动切换${RESET}"
 echo -e "    ${DIM}约 \$1 USDC ≈ 100 次 Claude Sonnet 请求${RESET}"
-else
-echo -e "  ${BOLD}${PAID} 想用付费模型？${RESET}"
-echo -e "    在这台客户端机器安装 OKX Onchain OS / Agentic Wallet 环境"
-echo -e "    安装完成后重新运行: ${W}okclawrouter${RESET}"
-echo -e "    ${DIM}默认支付方式: aggr_deferred 批量支付${RESET}"
-echo -e "    ${DIM}云端 backend 服务器不需要安装 onchainos${RESET}"
-fi
 
 echo ""
 echo -e "  ${BOLD}${BRAIN} OpenClaw 已自动配置，直接用:${RESET}"

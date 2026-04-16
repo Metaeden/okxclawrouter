@@ -10,6 +10,8 @@
 curl -fsSL https://raw.githubusercontent.com/Metaeden/okxclawrouter/main/install.sh | bash
 ```
 
+`install.sh` 会在当前这台客户端机器上强制安装或升级最新版本 `onchainos`。
+
 然后启动：
 ```bash
 okclawrouter
@@ -62,7 +64,7 @@ API Base URL → http://localhost:8402/v1
 
 ## 💰 解锁付费模型
 
-1. 在运行 `proxy` 的本机安装 OKX Onchain OS / Agentic Wallet 环境
+1. 运行一键安装脚本，它会在本机强制安装/升级最新 `onchainos`
 2. 登录: `/wallet login <你的邮箱>`
 3. 充值: 发送 USDC 到 X-Layer 钱包 → https://web3.okx.com/onchainos
 4. 使用: 连接钱包后付费模型自动生效
